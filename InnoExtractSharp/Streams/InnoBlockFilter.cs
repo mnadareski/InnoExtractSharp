@@ -1,6 +1,5 @@
 ﻿/*
- * Copyright (C) 2011-2014 Daniel Scharrer
- * Converted code Copyright (C) 2018 Matt Nadareski
+ * Copyright (C) 2011-2019 Daniel Scharrer
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the author(s) be held liable for any damages
@@ -36,7 +35,7 @@ namespace InnoExtractSharp.Streams
     /// 
     /// block_error is also thrown if there is trailing data: 0 < (total size % (4096 + 4)) < 5
     /// </summary>
-    public class InnoBlockFilter : Stream
+    public class InnoBlockFilter
     {
         /// <summary>
         /// Current read position in the buffer
@@ -49,16 +48,6 @@ namespace InnoExtractSharp.Streams
         public int BufferLength;
 
         private byte[] Buffer = new byte[4096];
-
-        public override bool CanRead => throw new NotImplementedException();
-
-        public override bool CanSeek => throw new NotImplementedException();
-
-        public override bool CanWrite => throw new NotImplementedException();
-
-        public override long Length => throw new NotImplementedException();
-
-        public override long Position { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 
         public InnoBlockFilter()
         {

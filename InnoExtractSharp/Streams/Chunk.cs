@@ -19,11 +19,6 @@
  * 3. This notice may not be removed or altered from any source distribution.
  */
 
-using System;
-using System.IO;
-using System.Linq;
-using InnoExtractSharp.Crypto;
-
 namespace InnoExtractSharp.Streams
 {
     /// <summary>
@@ -49,31 +44,6 @@ namespace InnoExtractSharp.Streams
         ARC4_SHA1,
     }
 
-    public class InnoArc4Crypter
-    {
-        private ARC4 arc4;
-
-        public InnoArc4Crypter(string key, int length)
-        {
-            arc4 = new ARC4();
-            arc4.Init(key, length);
-            arc4.Discard(1000);
-        }
-
-        public int Read(Stream src, out byte[] dest, int n)
-        {
-            dest = new byte[n];
-            int length = src.Read(dest, 0, n);
-            if (length != 0)
-            {
-                arc4.Crypt(new string(dest.Select(b => (char)b).ToArray()), out string destString, n);
-                dest = destString.ToCharArray().Select(c => (byte)c).ToArray();
-            }
-
-            return length;
-        }
-    }
-
     /// <summary>
     /// Information specifying a compressed chunk.
     /// 
@@ -83,8 +53,10 @@ namespace InnoExtractSharp.Streams
     /// </summary>
     public class Chunk
     {
-        public int FirstSlice; // Slice where the chunk starts.
-        public int LastSlice; // Slice where the chunk ends.
+        public uint FirstSlice; // Slice where the chunk starts.
+        public uint LastSlice; // Slice where the chunk ends.
+
+        public uint SortOffset;
 
         public uint Offset; // Offset of the compressed chunk in firstSlice.
         public ulong Size; // Total compressed size of the chunk.
@@ -123,76 +95,6 @@ namespace InnoExtractSharp.Streams
         public static bool operator !=(Chunk c1, Chunk c2)
         {
             return !(c1 == c2);
-        }
-    }
-
-    /// <summary>
-    /// Wrapper to read and decompress a chunk from a \ref slice_reader.
-    /// Restrics the stream to the chunk size and applies the appropriate decompression.
-    /// </summary>
-    public class ChunkReader
-    {
-        private static byte[] chunkId = { (byte)'z', (byte)'l', (byte)'b', 0x1a };
-
-        /// <summary>
-        ///  Wrap a \ref slice_reader to read and decompress a single chunk.
-        ///  
-        /// Only one wrapper can be used at the same time for each \c base.
-        /// </summary>
-        /// <param name="reader">The slice reader for the setup file(s).</param>
-        /// <param name="chunk">Information specifying the chunk to read.</param>
-        /// <param name="key">Key used for encrypted chunks.</param>
-        /// <returns>a pointer to a non-seekable input filter chain for the requested file.</returns>
-        public static int Get(Stream input, Chunk chunk, string key)
-        {
-            if (!input.CanSeek)
-                throw new Exception("could not seek to chunk start"); // TODO: We shouldn't do this
-
-            input.Seek(chunk.FirstSlice + chunk.Offset, SeekOrigin.Begin);
-            byte[] magic = new byte[chunkId.Length];
-            if (input.Read(magic, 0, 4) != 4 || !magic.SequenceEqual(chunkId))
-                throw new Exception("bad chunk magic"); // TODO: We shouldn't do this
-
-            int result = (int)input.Position;
-
-            switch (chunk.Compression)
-            {
-                case CompressionMethod.Stored:
-                    break;
-                case CompressionMethod.Zlib:
-                    // result.Push(zlib_decompressor(), 8192);
-                    break;
-                case CompressionMethod.BZip2:
-                    // result.Push(bzip2_decompressor(), 8192);
-                    break;
-                case CompressionMethod.LZMA1:
-                    // result.Push(inno_lzma1_decompressor(), 8192);
-                    break;
-                case CompressionMethod.LZMA2:
-                    // result.Push(inno_lzma2_decompressor(), 8192);
-                    break;
-                default:
-                    throw new Exception("unknown chunk compression"); // TODO: We shouldn't do this
-            }
-
-            if (chunk.Encryption != EncryptionMethod.Plaintext)
-            {
-                byte[] salt = new byte[8];
-                if (input.Read(salt, 0, 8) != 8)
-                    throw new Exception("could not read chunk salt"); // TODO: We shouldn't do this
-
-                Hasher hasher = new Hasher(chunk.Encryption == EncryptionMethod.ARC4_SHA1 ? ChecksumType.SHA1 : ChecksumType.MD5);
-                hasher.Update(salt, 0, salt.Length);
-                hasher.Update(key.ToCharArray().Select(c => (byte)c).ToArray(), 0, key.Length);
-                Checksum checksum = hasher.Finalize();
-                char[] saltedKey = chunk.Encryption == EncryptionMethod.ARC4_SHA1 ? checksum.SHA1 : checksum.MD5;
-                int keyLength = saltedKey.Length;
-                // result.Push(InnoArc4Crypter(salted_key, key_length), 8192);
-            }
-
-            // result.Push(restrict(base, chunk.size);
-
-            return result;
         }
     }
 }

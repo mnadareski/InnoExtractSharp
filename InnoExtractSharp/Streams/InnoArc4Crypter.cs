@@ -19,39 +19,33 @@
  */
 
 using System.IO;
+using System.Linq;
 using InnoExtractSharp.Crypto;
 
 namespace InnoExtractSharp.Streams
 {
-    /// <summary>
-    /// Filters to be used with boost::iostreams for calculating a \ref crypto::checksum.
-    /// 
-    /// An internal checksum state is updated as bytes are read and the final checksum is
-    /// written to the given checksum object when the end of the source stream is reached.
-    /// </summary>
-    public class ChecksumFilter
+    public class InnoArc4Crypter
     {
-        private Hasher Hasher;
-        private Checksum Output;
+        private ARC4 arc4;
 
-        /// <param name="dest">Location to store the final checksum at.</param>
-        /// <param name="type">The type of checksum to calculate.</param>
-        public ChecksumFilter(Checksum dest, ChecksumType type)
+        public InnoArc4Crypter(string key, int length)
         {
-            Hasher = new Hasher(type);
-            Output = dest;
+            arc4 = new ARC4();
+            arc4.Init(key, length);
+            arc4.Discard(1000);
         }
 
         public int Read(Stream src, ref byte[] dest, int n)
         {
-            int nread = src.Read(dest, 0, n);
+            int length = src.Read(dest, 0, n);
+            if (length != 0)
+            {
+                char[] destChar = new char[dest.Length];
+                arc4.Crypt(dest.Select(b => (char)b).ToArray(), ref destChar, n);
+                dest = destChar.Select(c => (byte)c).ToArray();
+            }
 
-            if (nread > 0)
-                Hasher.Update(dest, 0, nread);
-            else if (Output != null)
-                Output = Hasher.Finalize();
-
-            return nread;
+            return length;
         }
     }
 }

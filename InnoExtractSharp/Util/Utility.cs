@@ -19,6 +19,7 @@
  * 3. This notice may not be removed or altered from any source distribution.
  */
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -116,9 +117,35 @@ namespace InnoExtractSharp.Util
             /// <param name="sPtr">Current position in the command sequence.</param>
             /// <param name="end">End of the command sequence.</param>
             /// <returns>the next code in the command sequence or unsigned(-1) if there was an error.</returns>
-            protected uint ReadCode(char[] s, ref int sPtr, int end)
+            protected ulong ReadCode(byte[] s, ref int sPtr, int end)
             {
-                int sep = s.Skip(sPtr).First()
+                int sep = Array.IndexOf(s, (byte)Separator, sPtr, end - sPtr);
+                ulong code = UInt32.MaxValue;
+                switch (sep - sPtr)
+                {
+                    case 0:
+                        code = 0u;
+                        break;
+                    case 1:
+                        code = (byte)s[sPtr];
+                        break;
+                    case 2:
+                        code = BitConverter.ToUInt16(s, sPtr);
+                        break;
+                    case 4:
+                        code = BitConverter.ToUInt32(s, sPtr);
+                        break;
+                    case 8:
+                        code = BitConverter.ToUInt64(s, sPtr);
+                        break;
+                }
+
+                if (sep == end)
+                    sPtr = -1;
+                else
+                    sPtr = sep + 1;
+
+                return code;
             }
 
             private bool IsStartChar(char c)
@@ -129,6 +156,28 @@ namespace InnoExtractSharp.Util
             private bool IsEndChar(char c)
             {
                 return (c >= 64 && c < 127);
+            }
+
+            private int ReadCommand(byte[] s, ref int sPtr, int end)
+            {
+                if (sPtr == end)
+                    return end; // Need to be able to read something
+
+                if (Command.Count == 0 && s[sPtr] != (InCommand == ESC ? (byte)CSI : (byte)UTF8CSI1))
+                {
+                    switch (InCommand)
+                    {
+                        case ESC: /* escaped char */ break;
+                        default:
+                            char[] utf8 = { InCommand, sPtr }; // char utf8[] = { in_command, *s };
+                            HandleText(utf8, 2); // this->impl().handle_text(utf8, 2);
+                            break;
+                    }
+
+                    return sPtr + 1; // Not a Control Sequence Initiator
+                }
+
+
             }
         }
 
