@@ -43,22 +43,6 @@ namespace InnoExtractSharp.Loader
     /// </summary>
     public class Offsets
     {
-        private class SetupLoaderVersion
-        {
-            public char[] Magic = new char[12];
-
-            /// <summary>
-            /// Earliest known version with that ID
-            /// </summary>
-            public uint Version;
-
-            public SetupLoaderVersion(char[] magic, uint version)
-            {
-                this.Magic = magic;
-                this.Version = version;
-            }
-        }
-
         private SetupLoaderVersion[] knownSetupLoaderVersions = new SetupLoaderVersion[]
         {
             new SetupLoaderVersion(new char[] { 'r', 'D', 'l', 'P', 't', 'S', '0', '2', (char)0x87, 'e', 'V', 'x' },    InnoVersion.INNO_VERSION(1, 2, 10)),

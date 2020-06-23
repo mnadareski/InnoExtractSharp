@@ -60,11 +60,27 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="CLI\Debug.cs" />
+    <Compile Include="CLI\Constraint.cs" />
+    <Compile Include="CLI\CollisionMap.cs" />
+    <Compile Include="CLI\Chunks.cs" />
+    <Compile Include="CLI\MultiPartOutputs.cs" />
+    <Compile Include="CLI\Files.cs" />
     <Compile Include="CLI\Extract.cs" />
-    <Compile Include="CLI\GOG.cs" />
-    <Compile Include="CLI\GOGGalaxy.cs" />
-    <Compile Include="CLI\Main.cs" />
+    <Compile Include="CLI\ExtractOptions.cs" />
+    <Compile Include="CLI\FileOutput.cs" />
+    <Compile Include="CLI\DirectoriesMap.cs" />
+    <Compile Include="CLI\FilesMap.cs" />
+    <Compile Include="CLI\Filter.cs" />
+    <Compile Include="CLI\FormatError.cs" />
+    <Compile Include="CLI\Gog.cs" />
+    <Compile Include="CLI\GogGalaxy.cs" />
+    <Compile Include="CLI\OutputLocation.cs" />
+    <Compile Include="CLI\PathFilter.cs" />
+    <Compile Include="CLI\ProcessedDirectory.cs" />
+    <Compile Include="CLI\ProcessedEntries.cs" />
+    <Compile Include="CLI\ProcessedFile.cs" />
+    <Compile Include="CLI\ProcessedItem.cs" />
+    <Compile Include="CLI\TemporaryDirectory.cs" />
     <Compile Include="Crypto\Adler32.cs" />
     <Compile Include="Crypto\ARC4.cs" />
     <Compile Include="Crypto\Checksum.cs" />
@@ -73,7 +89,12 @@
     <Compile Include="Crypto\MD5.cs" />
     <Compile Include="Crypto\SHA1.cs" />
     <Compile Include="Loader\ExeReader.cs" />
+    <Compile Include="Loader\LeReader.cs" />
+    <Compile Include="Loader\NeReader.cs" />
     <Compile Include="Loader\Offsets.cs" />
+    <Compile Include="Loader\PeReader.cs" />
+    <Compile Include="Loader\Resource.cs" />
+    <Compile Include="Loader\SetupLoaderVersion.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Setup\ComponentEntry.cs" />
     <Compile Include="Setup\DataEntry.cs" />
@@ -99,6 +120,7 @@
     <Compile Include="Setup\WindowsVersion.cs" />
     <Compile Include="Stored.cs" />
     <Compile Include="Streams\FileReader.cs" />
+    <Compile Include="Streams\IFilter.cs" />
     <Compile Include="Streams\InnoExeDecoder4108.cs" />
     <Compile Include="Streams\InnoLzma1DecompressorImpl.cs" />
     <Compile Include="Streams\InnoLzma2DecompressorImpl.cs" />

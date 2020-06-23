@@ -107,7 +107,7 @@ namespace InnoExtractSharp.Setup
 
         // Information about GOG Galaxy multi-part files
         // These are not used in normal Inno Setup installers
-        List<uint> AdditionalLocations;
+        public List<uint> AdditionalLocations;
         public Checksum Checksum;
         public ulong Size;
 
