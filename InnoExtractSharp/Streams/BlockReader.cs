@@ -59,65 +59,62 @@ namespace InnoExtractSharp.Streams
         /// was invalid.</returns>
         public static Stream Get(Stream input, InnoVersion version)
         {
-            using (BinaryReader br = new BinaryReader(input, Encoding.Default, true))
+            uint expectedChecksum = Endianness<uint>.LoadLittleEndian(input);
+            CRC32 actualChecksum = new CRC32();
+            actualChecksum.Init();
+
+            uint storedSize;
+            BlockCompression compression;
+
+            if (version >= InnoVersion.INNO_VERSION(4, 0, 9))
             {
-                uint expectedChecksum = br.ReadUInt32();
-                CRC32 actualChecksum = new CRC32();
-                actualChecksum.Init();
+                storedSize = actualChecksum.LoadUInt32(input);
+                byte compressed = actualChecksum.LoadByte(input);
 
-                uint storedSize;
-                BlockCompression compression;
+                compression = (compressed == 1) ? (version >= InnoVersion.INNO_VERSION(4, 1, 6) ? BlockCompression.LZMA1 : BlockCompression.Zlib) : BlockCompression.Stored;
+            }
+            else
+            {
+                uint compressedSize = actualChecksum.LoadUInt32(input);
+                uint uncompressedSize = actualChecksum.LoadUInt32(input);
 
-                if (version >= InnoVersion.INNO_VERSION(4, 0, 9))
+                if (compressedSize == UInt32.MaxValue)
                 {
-                    storedSize = actualChecksum.LoadUInt32(input);
-                    byte compressed = actualChecksum.LoadByte(input);
-
-                    compression = (compressed == 1) ? (version >= InnoVersion.INNO_VERSION(4, 1, 6) ? BlockCompression.LZMA1 : BlockCompression.Zlib) : BlockCompression.Stored;
+                    storedSize = uncompressedSize;
+                    compression = BlockCompression.Stored;
                 }
                 else
                 {
-                    uint compressedSize = actualChecksum.LoadUInt32(input);
-                    uint uncompressedSize = actualChecksum.LoadUInt32(input);
-
-                    if (compressedSize == UInt32.MaxValue)
-                    {
-                        storedSize = uncompressedSize;
-                        compression = BlockCompression.Stored;
-                    }
-                    else
-                    {
-                        storedSize = compressedSize;
-                        compression = BlockCompression.Zlib;
-                    }
-
-                    // Add the size of a CRC32 checksum for each 4KiB subblock
-                    storedSize += (Utility.CeilDiv(storedSize, 4096) * 4);
+                    storedSize = compressedSize;
+                    compression = BlockCompression.Zlib;
                 }
 
-                if (actualChecksum.Finalize() != expectedChecksum)
-                    throw new Exception("Block header CRC32 mismatch"); // TODO: We don't want to do this
-
-                switch (compression)
-                {
-                    case BlockCompression.Stored:
-                        break;
-                    case BlockCompression.Zlib:
-                        // fis.push(zlib_decompressor(), 8192);
-                        break;
-                    case BlockCompression.LZMA1:
-                        // fis.push(inno_lzma_decompressor(), 8192);
-                        break;
-                }
-
-                InnoBlockFilter fis = input as InnoBlockFilter;
-                fis.BufferLength = 4096;
-                // fis.push(io.restrict(base, 0, storedSize);
-                // fis.exceptions(badbit | failbit);
-
-                // return pointer(fis.release());
-                return fis;
+                // Add the size of a CRC32 checksum for each 4KiB subblock
+                storedSize += (Utility.CeilDiv(storedSize, 4096) * 4);
             }
+
+            if (actualChecksum.Finalize() != expectedChecksum)
+                throw new Exception("Block header CRC32 mismatch"); // TODO: We don't want to do this
+
+            FilteredStream fis = new FilteredStream(input);
+            switch (compression)
+            {
+                case BlockCompression.Stored:
+                    break;
+                case BlockCompression.Zlib:
+                    fis.Push(zlib_decompressor, 8192);
+                    break;
+                case BlockCompression.LZMA1:
+                    fis.Push(new InnoLzma1Decompressor(), 8192);
+                    break;
+            }
+
+            fis.length = 4096;
+            // fis.push(io.restrict(base, 0, storedSize);
+            // fis.exceptions(badbit | failbit);
+
+            // return pointer(fis.release());
+            return fis;
         }
     }
 }

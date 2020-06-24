@@ -28,7 +28,7 @@ namespace InnoExtractSharp.Crypto
         private int a;
         private int b;
 
-        public void Init(string key, int length)
+        public void Init(byte[] key, int length)
         {
             a = b = 0;
 
@@ -40,7 +40,7 @@ namespace InnoExtractSharp.Crypto
             int j = 0;
             for (int i = 0; i < state.Length; i++)
             {
-                j = (j + state[i] + (byte)(key[i % length])) % state.Length;
+                j = (j + state[i] + key[i % length]) % state.Length;
                 byte temp = state[i]; state[i] = state[j]; state[j] = temp;
             }
         }
@@ -53,12 +53,12 @@ namespace InnoExtractSharp.Crypto
             }
         }
 
-        public void Crypt(char[] inArr, ref char[] outArr, int length)
+        public void Crypt(byte[] inArr, byte[] outArr, int length)
         {
             for (int i = 0; i < length; i++)
             {
                 Update();
-                outArr[i] = (char)(state[(state[a] + state[b]) % state.Length] ^ (byte)inArr[i]);
+                outArr[i] = (byte)(state[(state[a] + state[b]) % state.Length] ^ inArr[i]);
             }
         }
 

@@ -29,7 +29,7 @@ namespace InnoExtractSharp.Streams
     /// An internal checksum state is updated as bytes are read and the final checksum is
     /// written to the given checksum object when the end of the source stream is reached.
     /// </summary>
-    public class ChecksumFilter
+    public class ChecksumFilter : IFilter
     {
         private Hasher Hasher;
         private Checksum Output;
@@ -42,7 +42,7 @@ namespace InnoExtractSharp.Streams
             Output = dest;
         }
 
-        public int Read(Stream src, ref byte[] dest, int n)
+        public int Read(Stream src, byte[] dest, int offset, int n)
         {
             int nread = src.Read(dest, 0, n);
 

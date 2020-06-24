@@ -1,5 +1,6 @@
 ﻿/*
- * Copyright (C) 2011-2018 Daniel Scharrer
+ * Copyright (C) 2011-2014 Daniel Scharrer
+ * Converted code Copyright (C) 2018 Matt Nadareski
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the author(s) be held liable for any damages
@@ -18,22 +19,19 @@
  * 3. This notice may not be removed or altered from any source distribution.
  */
 
-using System;
-
+// LZMA 1 and 2 (aka xz) descompression filters to be used with boost::iostreams.
 namespace InnoExtractSharp.Streams
 {
-    //! Error thrown if there was en error in an LZMA stream
-    public class LzmaError : Exception
+    /// <summary>
+    /// A filter that decompressess LZMA1 streams found in Inno Setup installers,
+    /// to be used with boost::iostreams.
+    /// 
+    /// The LZMA1 streams used by Inno Setup differ slightly from the LZMA Alone file format:
+    /// The stream header only stores the properties (lc, lp, pb) and the dictionary size and
+    /// is missing the uncompressed size field. The fiels that are present are encoded
+    /// identically.
+    /// </summary>
+    public class InnoLzma1Decompressor : LzmaDecompressor<InnoLzma1DecompressorImpl>
     {
-        private int errorCode;
-
-        public LzmaError(string msg, int code)
-            : base(msg)
-        {
-            errorCode = code;
-        }
-
-        /// <returns>the liblzma code for the error.</returns>
-        public int Error() { return errorCode; }
     }
 }

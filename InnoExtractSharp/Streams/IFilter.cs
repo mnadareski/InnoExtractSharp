@@ -4,6 +4,6 @@ namespace InnoExtractSharp.Streams
 {
     public interface IFilter
     {
-        int Read(Stream src, ref byte[] dest, int n);
+        int Read(Stream src, byte[] dest, int offset, int n);
     }
 }

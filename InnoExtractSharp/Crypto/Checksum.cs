@@ -124,17 +124,17 @@ namespace InnoExtractSharp.Crypto
         /// </summary>
         /// <param name="input"></param>
         /// <returns></returns>
-        public uint LoadUInt32(Stream input, Endianness end = null)
+        public uint LoadUInt32(Stream input, Endianness<uint> end = null)
         {
             if (end == null)
-                end = new LittleEndian();
+                end = new LittleEndian<uint>();
 
             byte[] buffer = new byte[sizeof(uint)];
             using (BinaryReader br = new BinaryReader(input, Encoding.Default, true))
             {
                 buffer = br.ReadBytes(buffer.Length);
                 this.Update(buffer, 0, buffer.Length);
-                return end.LoadUInt32(buffer, 0);
+                return end.Load(buffer, 0);
             }
         }
 
@@ -144,17 +144,17 @@ namespace InnoExtractSharp.Crypto
         /// </summary>
         /// <param name="input"></param>
         /// <returns></returns>
-        public byte LoadByte(Stream input, Endianness end = null)
+        public byte LoadByte(Stream input, Endianness<byte> end = null)
         {
             if (end == null)
-                end = new LittleEndian();
+                end = new LittleEndian<byte>();
 
             byte[] buffer = new byte[sizeof(byte)];
             using (BinaryReader br = new BinaryReader(input, Encoding.Default, true))
             {
                 buffer = br.ReadBytes(buffer.Length);
                 this.Update(buffer, 0, buffer.Length);
-                return end.LoadByte(buffer, 0);
+                return end.Load(buffer, 0);
             }
         }
     }

@@ -18,13 +18,13 @@
  * 3. This notice may not be removed or altered from any source distribution.
  */
 
-using System.IO;
 using SharpCompress.Compressors.LZMA;
+using System.IO;
 
 // LZMA 1 and 2 (aka xz) descompression filters to be used with boost::iostreams.
 namespace InnoExtractSharp.Streams
 {
-    public abstract class LzmaDecompressorImplBase
+    public unsafe abstract class LzmaDecompressorImplBase
     {
         protected Stream Stream;
 
@@ -39,45 +39,41 @@ namespace InnoExtractSharp.Streams
             Close();
         }
 
-        public virtual bool Filter(ref char[] input, int beginIn, int endIn, int beginOut, int endOut, bool flush)
+        public virtual bool Filter(char* beginIn, char* endIn, char* beginOut, char* endOut, bool flush)
         {
             LzmaStream strm = Stream as LzmaStream;
 
-            /*
-            // TODO: Figure out what any of this does
-            strm->next_in = reinterpret_cast <const boost::uint8_t*> (begin_in);
-            strm->avail_in = size_t(end_in - begin_in);
+            strm.NextIn = (byte*)beginIn;
+            strm.AvailIn = (int)(endIn - beginIn);
 
-            strm->next_out = reinterpret_cast<boost::uint8_t*>(begin_out);
-            strm->avail_out = size_t(end_out - begin_out);
+            strm.NextOut = (byte*)beginOut;
+            strm.AvailOut = (int)(endOut - beginOut);
 
-            lzma_ret ret = lzma_code(strm, LZMA_RUN);
+            LzmaRet ret = LzmaCode(strm, LZMA_RUN);
 
-            if (flush && ret == LZMA_BUF_ERROR && strm->avail_out > 0)
+            if (flush && ret == LZMA_BUF_ERROR && strm.AvailOut > 0)
             {
-                throw lzma_error("truncated lzma stream", ret);
+                throw new LzmaError("truncated lzma stream", (int)ret);
             }
 
-            begin_in = reinterpret_cast <const char*> (strm->next_in);
-            begin_out = reinterpret_cast<char*>(strm->next_out);
+            beginIn = (char*)strm.NextIn;
+            beginOut = (char*)strm.NextOut;
 
             if (ret != LZMA_OK && ret != LZMA_STREAM_END && ret != LZMA_BUF_ERROR)
             {
-                throw lzma_error("lzma decrompression error", ret);
+                throw new LzmaError("lzma decrompression error", (int)ret);
             }
 
             return (ret != LZMA_STREAM_END);
-            */
-
-            return true;
         }
 
         public virtual void Close()
         {
             if (Stream != null)
             {
-                Stream.Close();
-                Stream = null;
+                LzmaStream strm = Stream as LzmaStream;
+                LzmaEnd(strm);
+                strm.Dispose(); Stream.Dispose();
             }
         }
     }

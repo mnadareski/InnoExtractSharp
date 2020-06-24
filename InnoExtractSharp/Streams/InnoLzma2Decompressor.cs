@@ -1,5 +1,6 @@
 ﻿/*
- * Copyright (C) 2011-2018 Daniel Scharrer
+ * Copyright (C) 2011-2014 Daniel Scharrer
+ * Converted code Copyright (C) 2018 Matt Nadareski
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the author(s) be held liable for any damages
@@ -18,8 +19,6 @@
  * 3. This notice may not be removed or altered from any source distribution.
  */
 
-using SharpCompress.Compressors.LZMA;
-
 // LZMA 1 and 2 (aka xz) descompression filters to be used with boost::iostreams.
 namespace InnoExtractSharp.Streams
 {
@@ -30,31 +29,7 @@ namespace InnoExtractSharp.Streams
     /// Inno Setup uses raw LZMA2 streams.
     /// (preceded only by the dictionary size encoded as one byte)
     /// </summary>
-    public unsafe class InnoLzma2DecompressorImpl : LzmaDecompressorImplBase
+    public class InnoLzma2Decompressor : LzmaDecompressor<InnoLzma2DecompressorImpl>
     {
-        public override bool Filter(char* beginIn, char* endIn, char* beginOut, char* endOut, bool flush)
-        {
-			// Decode the header.
-			if (Stream == null)
-			{
-				if (beginIn == endIn)
-					return true;
-
-				LzmaOptionsLzma options = new LzmaOptionsLzma();
-
-				byte prop = (byte)*beginIn++;
-				if (prop > 40)
-					throw new LzmaError("inno lzma2 property error", (int)LZMA_FORMAT_ERROR);
-
-                if (prop == 40)
-                    options.DictSize = 0xffffffff;
-                else
-                    options.DictSize = ((2 | (uint)((prop) & 1)) << (prop / 2 + 11));
-
-                Stream = InnoLzma2Decompressor.InitRawLzmaStream(LZMA_FILTER_LZMA2, options);
-			}
-
-			return base.Filter(beginIn, endIn, beginOut, endOut, flush);
-		}
     }
 }

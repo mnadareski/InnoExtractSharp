@@ -18,11 +18,10 @@
  * 3. This notice may not be removed or altered from any source distribution.
  */
 
+using InnoExtractSharp.Util;
 using System;
 using System.IO;
 using System.Linq;
-using System.Text;
-using System.Xml;
 
 namespace InnoExtractSharp.Streams
 {
@@ -37,24 +36,24 @@ namespace InnoExtractSharp.Streams
     /// (read by \ref chunk_reader), which in turn contain one or more  \ref file "files"
     /// (read by \ref file_reader).
     /// </summary>
-    public class SliceReader
+    public class SliceReader : Stream
     {
         // Information for reading embedded setup data
-        public readonly uint DataOffset;
+        private uint dataOffset;
 
         // Information for eading external setup data
-        public string Dir;          //!< Slice directory specified at construction.
-        public string BaseFile;     //!< Base file name for slices.
-        public string BaseFile2;    //!< Fallback base filename for slices.
-        public int SlicesPerDisk;   //!< Number of slices grouped into each disk (for names).
+        private string dir;          //!< Slice directory specified at construction.
+        private string baseFile;     //!< Base file name for slices.
+        private string baseFile2;    //!< Fallback base filename for slices.
+        private int slicesPerDisk;   //!< Number of slices grouped into each disk (for names).
 
         // Information about the current slice
-        public int CurrentSlice;    //!< Number of the currently opened slice.
-        public uint SliceSize;      //!< Size in bytes of the currently opened slice.
+        private int currentSlice;    //!< Number of the currently opened slice.
+        private uint sliceSize;      //!< Size in bytes of the currently opened slice.
 
         // Streams
-        public Stream Ifs;          //!< File input stream used when reading from external slices.
-        public Stream Input;        //!< Input stream to read from.
+        private FileStream ifs;      //!< File input stream used when reading from external slices.
+        private Stream input;        //!< Input stream to read from.
 
         private static string[] sliceIds =
         {
@@ -69,7 +68,7 @@ namespace InnoExtractSharp.Streams
         /// The constructed reader will allow reading the byte range [data_offset, file end)
         /// from the setup executable and provide this as the range [0, file end - data_offset).
         /// </summary>
-        /// <param name="input">
+        /// <param name="istream">
         /// A seekable input stream for the setup executable.
         /// The initial read position of the stream is ignored.
         /// </param>
@@ -77,19 +76,18 @@ namespace InnoExtractSharp.Streams
         /// The offset within the given stream where the setup data starts.
         /// This offset is given by \ref loader::offsets::data_offset.
         /// </param>
-        public SliceReader(Stream input, uint offset)
+        public SliceReader(Stream istream, uint offset)
         {
-            DataOffset = offset;
-            SlicesPerDisk = 1;
-            CurrentSlice = 0;
-            SliceSize = 0;
-            Input = input;
+            dataOffset = offset;
+            slicesPerDisk = 1;
+            currentSlice = 0;
+            sliceSize = 0;
+            input = istream;
 
-            int maxSize = Int32.MaxValue;
-            long fileSize = input.Length;
+            long fileSize = istream.Length;
 
-            SliceSize = (uint)Math.Min(fileSize, maxSize);
-            if (DataOffset > fileSize)
+            sliceSize = (uint)Math.Min(fileSize, Int32.MaxValue);
+            if (dataOffset > fileSize)
                 throw new SliceError("could not seek to data");
         }
 
@@ -109,22 +107,22 @@ namespace InnoExtractSharp.Streams
         /// <param name="diskSliceCount">How many slices are grouped into one disk. Must not be \c 0.</param>
         public SliceReader(string dirname, string basename, string basename2, int diskSliceCount)
         {
-            DataOffset = 0;
-            Dir = dirname;
-            BaseFile = basename;
-            BaseFile2 = basename2;
-            SlicesPerDisk = diskSliceCount;
-            CurrentSlice = 0;
-            SliceSize = 0;
-            Input = Ifs;
+            dataOffset = 0;
+            dir = dirname;
+            baseFile = basename;
+            baseFile2 = basename2;
+            slicesPerDisk = diskSliceCount;
+            currentSlice = 0;
+            sliceSize = 0;
+            input = ifs;
         }
 
         public void Seek(int slice)
         {
-            if (slice == CurrentSlice && IsOpen())
+            if (slice == currentSlice && IsOpen())
                 return;
 
-            if (DataOffset != 0)
+            if (dataOffset != 0)
                 throw new SliceError("cannot change slices in single-file setup");
 
             Open(slice);
@@ -135,19 +133,27 @@ namespace InnoExtractSharp.Streams
             if (!File.Exists(file))
                 return false;
 
+            Console.WriteLine($"Opening \"{file}\"");
+
             try
             {
-                Ifs.Close();
+                ifs?.Close();
 
-                Ifs = File.OpenRead(file);
-                if (Ifs == null)
+                ifs = File.OpenRead(file);
+                if (ifs == null)
                     return false;
 
-                long fileSize = Ifs.Length;
-                Ifs.Seek(0, SeekOrigin.Begin);
+                long fileSize = ifs.Length;
+                ifs.Seek(0, SeekOrigin.Begin);
 
                 byte[] magic = new byte[8];
-                Ifs.Read(magic, 0, 8);
+                int magicRead = ifs.Read(magic, 0, 8);
+                if (magicRead < 8)
+                {
+                    ifs.Close();
+                    throw new SliceError($"could not read slice magic number in \"{file}\"");
+                }
+
                 string magicString = new string(magic.Select(b => (char)b).ToArray());
 
                 bool found = false;
@@ -162,34 +168,32 @@ namespace InnoExtractSharp.Streams
 
                 if (!found)
                 {
-                    Ifs.Close();
+                    ifs.Close();
                     throw new SliceError($"bad slice magic number in \"{file}\"");
                 }
 
-                byte[] sliceSizeArr = new byte[4];
-                if (Ifs.Read(sliceSizeArr, 0, 4) == 0)
+                sliceSize = Endianness<uint>.LoadLittleEndian(ifs);
+                if (sliceSize == 0)
                 {
-                    Ifs.Close();
+                    ifs.Close();
                     throw new SliceError($"could not read slice size in \"{file}\"");
                 }
-
-                SliceSize = BitConverter.ToUInt32(sliceSizeArr, 0);
-                if (SliceSize > fileSize)
+                else if (sliceSize > fileSize)
                 {
-                    Ifs.Close();
-                    throw new SliceError($"bad slice size in {file}: {SliceSize} > {fileSize}");
+                    ifs.Close();
+                    throw new SliceError($"bad slice size in {file}: {sliceSize} > {fileSize}");
                 }
-                else if (SliceSize < Ifs.Position)
+                else if (sliceSize < ifs.Position)
                 {
-                    Ifs.Close();
-                    throw new SliceError($"bad slice size in {file}: {SliceSize} < {Ifs.Position}");
+                    ifs.Close();
+                    throw new SliceError($"bad slice size in {file}: {sliceSize} < {ifs.Position}");
                 }
 
                 return true;
             }
             catch
             {
-                Ifs.Close();
+                ifs.Close();
                 throw new SliceError("Error reading from slice");
             }
         }
@@ -224,7 +228,7 @@ namespace InnoExtractSharp.Streams
             foreach (string path in Directory.EnumerateFiles(dirname, "*", SearchOption.AllDirectories))
             {
                 string actualFilename = Path.GetFileName(path);
-                if (string.Equals(actualFilename, filename, StringComparison.OrdinalIgnoreCase) && OpenFile(path))
+                if (string.Equals(actualFilename, filename, StringComparison.OrdinalIgnoreCase) && OpenFile(Path.Combine(dirname, actualFilename)))
                     return true;
             }
 
@@ -233,26 +237,26 @@ namespace InnoExtractSharp.Streams
 
         public void Open(int slice)
         {
-            CurrentSlice = slice;
-            Input = Ifs;
-            // Ifs.Close();
+            currentSlice = slice;
+            input = ifs;
+            ifs = null;
 
-            string sliceFile = SliceFilename(BaseFile, slice, SlicesPerDisk);
-            if (OpenFile(Path.Combine(Dir, sliceFile)))
+            string sliceFile = SliceFilename(baseFile, slice, slicesPerDisk);
+            if (OpenFile(Path.Combine(dir, sliceFile)))
                 return;
 
-            string sliceFile2 = SliceFilename(BaseFile2, slice, SlicesPerDisk);
-            if (!string.IsNullOrWhiteSpace(BaseFile2) && sliceFile != sliceFile2 && OpenFile(Path.Combine(Dir, sliceFile2)))
+            string sliceFile2 = SliceFilename(baseFile2, slice, slicesPerDisk);
+            if (!string.IsNullOrWhiteSpace(baseFile2) && sliceFile != sliceFile2 && OpenFile(Path.Combine(dir, sliceFile2)))
                 return;
 
-            if (OpenFileCaseInsensitive(Dir, sliceFile))
+            if (OpenFileCaseInsensitive(dir, sliceFile))
                 return;
 
-            if (!string.IsNullOrWhiteSpace(BaseFile2) && sliceFile2 != sliceFile && OpenFileCaseInsensitive(Dir, sliceFile2))
+            if (!string.IsNullOrWhiteSpace(baseFile2) && sliceFile2 != sliceFile && OpenFileCaseInsensitive(dir, sliceFile2))
                 return;
 
             string oss = $"could not open slice {slice}: {sliceFile}";
-            if (!string.IsNullOrWhiteSpace(BaseFile2) && sliceFile2 != sliceFile)
+            if (!string.IsNullOrWhiteSpace(baseFile2) && sliceFile2 != sliceFile)
                 oss += $" or {sliceFile2}";
 
             throw new SliceError(oss);
@@ -271,15 +275,15 @@ namespace InnoExtractSharp.Streams
         {
             Seek(slice);
 
-            offset += DataOffset;
+            offset += dataOffset;
 
-            if (offset > SliceSize)
+            if (offset > sliceSize)
                 return false;
 
-            if (offset >= Input.Length)
+            if (offset >= input.Length)
                 return false;
 
-            Input.Seek(offset, SeekOrigin.Begin);
+            input.Seek(offset, SeekOrigin.Begin);
             return true;
         }
 
@@ -298,55 +302,84 @@ namespace InnoExtractSharp.Streams
         /// end of the last slice, this function blocks until the number of requested
         /// bytes have been read.
         /// </returns>
-        public int Read(ref char[] buffer, ref int bufferPtr, int bytes)
+        public override int Read(byte[] buffer, int offset, int bytes)
         {
-            using (BinaryReader br = new BinaryReader(Input, Encoding.Default, true))
+            Seek(currentSlice);
+
+            int nread = 0;
+            while (bytes > 0)
             {
-                Seek(CurrentSlice);
+                long readPos = input.Position;
+                if (readPos > sliceSize)
+                    break;
 
-                int nread = 0;
-                while (bytes > 0)
+                long remaining = sliceSize - readPos;
+                if (remaining == 0)
                 {
-                    long readPos = Input.Position;
-                    if (readPos > SliceSize)
+                    Seek(currentSlice + 1);
+                    readPos = input.Position;
+                    if (readPos > sliceSize)
                         break;
 
-                    long remaining = SliceSize - readPos;
-                    if (remaining == 0)
-                    {
-                        Seek(CurrentSlice + 1);
-                        readPos = Input.Position;
-                        if (readPos > SliceSize)
-                            break;
-
-                        remaining = SliceSize - readPos;
-                    }
-
-                    ulong toread = (ulong)Math.Min(remaining, bytes);
-                    toread = Math.Min(toread, Int32.MaxValue);
-                    byte[] byteBuffer = new byte[(int)toread];
-                    int read = Input.Read(byteBuffer, bufferPtr, (int)toread);
-                    if (read == 0)
-                        break;
-
-                    Array.Copy(byteBuffer.Select(b => (char)b).ToArray(), 0, buffer, bufferPtr, (int)toread);
-                    nread += read; bufferPtr += read; bytes -= read;
+                    remaining = sliceSize - readPos;
                 }
 
-                return (nread != 0 || bytes == 0) ? nread : -1;
+                int toread = (int)Math.Min(remaining, bytes);
+                toread = Math.Min(toread, Int32.MaxValue);
+                int read = input.Read(buffer, offset, toread);
+                if (read == 0)
+                    break;
+
+                nread += read; offset += read; bytes -= read;
             }
+
+            return (nread != 0 || bytes == 0) ? nread : -1;
         }
 
         /// <returns>the number currently opened slice.</returns>
         public int Slice()
         {
-            return CurrentSlice;
+            return currentSlice;
         }
 
         /// <returns>true a slice is currently open.</returns>
         public bool IsOpen()
         {
-            return Input != Ifs || Ifs.CanRead;
+            return input != ifs || ifs.CanRead;
         }
+
+        #region Stream Overrides
+
+        public override bool CanRead => input.CanRead;
+
+        public override bool CanSeek => input.CanSeek;
+
+        public override bool CanWrite => input.CanWrite;
+
+        public override long Length => input.Length;
+
+        public override long Position { get => input.Position; set => input.Position = value; }
+
+        public override void Flush()
+        {
+            input.Flush();
+        }
+
+        public override long Seek(long offset, SeekOrigin origin)
+        {
+            return input.Seek(offset, origin);
+        }
+
+        public override void SetLength(long value)
+        {
+            input.SetLength(value);
+        }
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            input.Write(buffer, offset, count);
+        }
+
+        #endregion
     }
 }

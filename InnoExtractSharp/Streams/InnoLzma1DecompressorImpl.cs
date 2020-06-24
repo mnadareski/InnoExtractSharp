@@ -18,7 +18,8 @@
  * 3. This notice may not be removed or altered from any source distribution.
  */
 
-using SharpCompress.Compressors.LZMA;
+using InnoExtractSharp.Util;
+using System.Linq;
 
 // LZMA 1 and 2 (aka xz) descompression filters to be used with boost::iostreams.
 namespace InnoExtractSharp.Streams
@@ -32,7 +33,7 @@ namespace InnoExtractSharp.Streams
     /// is missing the uncompressed size field. The fiels that are present are encoded
     /// identically.
     /// </summary>
-    public class InnoLzma1DecompressorImpl : LzmaDecompressorImplBase
+    public unsafe class InnoLzma1DecompressorImpl : LzmaDecompressorImplBase
     {
         private int nread; // Number of bytes read into header
         private char[] Header = new char[5];
@@ -42,7 +43,7 @@ namespace InnoExtractSharp.Streams
             nread = 0;
         }
 
-        public override bool Filter(ref char[] input, int beginIn, int endIn, int beginOut, int endOut, bool flush)
+        public override bool Filter(char* beginIn, char* endIn, char* beginOut, char* endOut, bool flush)
         {
             // Decode the header.
             if (Stream == null)
@@ -53,26 +54,25 @@ namespace InnoExtractSharp.Streams
                     if (beginIn == endIn)
                         return true;
 
-                    Header[nread++] = input[beginIn++];
+                    Header[nread++] = *beginIn++;
                 }
 
-                LzmaEncoderProperties options = new LzmaEncoderProperties();
+                LzmaOptionsLzma options = new LzmaOptionsLzma();
 
                 byte properties = (byte)Header[0];
                 if (properties > (9 * 5 * 5))
-                    throw new LzmaError("inno lzma1 property error", 7 /* LZMA_FORMAT_ERROR */);
+                    throw new LzmaError("inno lzma1 property error", (int)LZMA_FORMAT_ERROR);
 
-                // TODO: Figure out these options
-                //options.pb = boost::uint32_t(properties / (9 * 5));
-                //options.lp = boost::uint32_t((properties % (9 * 5)) / 9);
-                //options.lc = boost::uint32_t(properties % 9);
+                options.PB = (uint)(properties / (9 * 5));
+                options.LP = (uint)((properties % (9 * 5)) / 9);
+                options.LC = (uint)(properties % 9);
 
-                //options.dict_size = util::little_endian::load<boost::uint32_t>(header + 1);
+                options.DictSize = new LittleEndian<uint>().Load(Header.Select(c => (byte)c).ToArray(), 1);
 
-                Stream = LzmaDecompressor.InitRawLzmaStream(false, options);
+                Stream = InnoLzma1Decompressor.InitRawLzmaStream(LZMA_FILTER_LZMA1, options);
             }
 
-            return base.Filter(ref input, beginIn, endIn, beginOut, endOut, flush);
+            return base.Filter(beginIn, endIn, beginOut, endOut, flush);
         }
 
         public override void Close()

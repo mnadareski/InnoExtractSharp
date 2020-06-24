@@ -31,7 +31,7 @@ namespace InnoExtractSharp.Streams
     /// </summary>
     public class ChunkReader
     {
-        private static char[] chunkId = { 'z', 'l', 'b', (char)0x1a };
+        private static byte[] chunkId = { (byte)'z', (byte)'l', (byte)'b', 0x1a };
 
         /// <summary>
         ///  Wrap a \ref slice_reader to read and decompress a single chunk.
@@ -42,54 +42,54 @@ namespace InnoExtractSharp.Streams
         /// <param name="chunk">Information specifying the chunk to read.</param>
         /// <param name="key">Key used for encrypted chunks.</param>
         /// <returns>a pointer to a non-seekable input filter chain for the requested file.</returns>
-        public static int Get(Stream input, Chunk chunk, string key)
+        public static Stream Get(SliceReader reader, Chunk chunk, string key)
         {
-            if (!input.CanSeek)
-                throw new Exception("could not seek to chunk start"); // TODO: We shouldn't do this
+            if (!reader.CanSeek || !reader.Seek((int)chunk.FirstSlice, chunk.Offset))
+                throw new ChunkError("could not seek to chunk start");
 
-            input.Seek(chunk.FirstSlice + chunk.Offset, SeekOrigin.Begin);
+            reader.Seek(chunk.FirstSlice + chunk.Offset, SeekOrigin.Begin);
             byte[] magic = new byte[chunkId.Length];
-            if (input.Read(magic, 0, 4) != 4 || !magic.SequenceEqual(chunkId))
-                throw new Exception("bad chunk magic"); // TODO: We shouldn't do this
+            if (reader.Read(magic, 0, 4) != 4 || !magic.SequenceEqual(chunkId))
+                throw new Exception("bad chunk magic");
 
-            int result = (int)input.Position;
+            FilteredStream result = new FilteredStream(reader);
 
             switch (chunk.Compression)
             {
                 case CompressionMethod.Stored:
                     break;
                 case CompressionMethod.Zlib:
-                    // result.Push(zlib_decompressor(), 8192);
+                    result.Push(new io::zlib_decompressor(), 8192);
                     break;
                 case CompressionMethod.BZip2:
-                    // result.Push(bzip2_decompressor(), 8192);
+                    result.Push(new io::bzip2_decompressor(), 8192);
                     break;
                 case CompressionMethod.LZMA1:
-                    // result.Push(inno_lzma1_decompressor(), 8192);
+                    result.Push(new InnoLzma1Decompressor(), 8192);
                     break;
                 case CompressionMethod.LZMA2:
-                    // result.Push(inno_lzma2_decompressor(), 8192);
+                    result.Push(new InnoLzma2Decompressor(), 8192);
                     break;
                 default:
-                    throw new Exception("unknown chunk compression"); // TODO: We shouldn't do this
+                    throw new Exception("unknown chunk compression");
             }
 
             if (chunk.Encryption != EncryptionMethod.Plaintext)
             {
                 byte[] salt = new byte[8];
-                if (input.Read(salt, 0, 8) != 8)
-                    throw new Exception("could not read chunk salt"); // TODO: We shouldn't do this
+                if (reader.Read(salt, 0, 8) != 8)
+                    throw new Exception("could not read chunk salt");
 
                 Hasher hasher = new Hasher(chunk.Encryption == EncryptionMethod.ARC4_SHA1 ? ChecksumType.SHA1 : ChecksumType.MD5);
                 hasher.Update(salt, 0, salt.Length);
                 hasher.Update(key.ToCharArray().Select(c => (byte)c).ToArray(), 0, key.Length);
                 Checksum checksum = hasher.Finalize();
-                char[] saltedKey = chunk.Encryption == EncryptionMethod.ARC4_SHA1 ? checksum.SHA1 : checksum.MD5;
+                byte[] saltedKey = chunk.Encryption == EncryptionMethod.ARC4_SHA1 ? checksum.SHA1 : checksum.MD5;
                 int keyLength = saltedKey.Length;
-                // result.Push(InnoArc4Crypter(salted_key, key_length), 8192);
+                result.Push(new InnoArc4Crypter(saltedKey, keyLength), 8192);
             }
 
-            // result.Push(restrict(base, chunk.size);
+            result.Push(RestrictedSource.Restrict(reader, (long)chunk.Size));
 
             return result;
         }

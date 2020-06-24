@@ -18,12 +18,8 @@
  * 3. This notice may not be removed or altered from any source distribution.
  */
 
-using System;
-using System.Collections.Generic;
 using System.IO;
 using InnoExtractSharp.Crypto;
-using SharpCompress.Compressors;
-using SharpCompress.Compressors.Deflate;
 
 namespace InnoExtractSharp.Streams
 {
@@ -44,37 +40,37 @@ namespace InnoExtractSharp.Streams
         /// The type of the checksum will be the same as that stored in the file
         /// struct.</param>
         /// <returns>a pointer to a non-seekable input stream for the requested file.</returns>
-        public List<Tuple<object, int>> Get(Stream input, InnoFile file, Checksum checksum)
+        public Stream Get(Stream input, InnoFile file, Checksum checksum)
         {
-            var result = new List<Tuple<object, int>>();
+            FilteredStream result = new FilteredStream(input);
 
             if (file.Filter == CompressionFilter.ZlibFilter)
-                result.Add(Tuple.Create(new DeflateStream(input, CompressionMode.Decompress) as object, 8192));
+                result.Push(io::zlib_decompressor(), 8192);
 
             if (checksum != null)
-                result.Add(Tuple.Create(new ChecksumFilter(checksum, file.Checksum.Type) as object, 8192));
+                result.Push(new ChecksumFilter(checksum, file.Checksum.Type), 8192);
 
             switch (file.Filter)
             {
                 case CompressionFilter.NoFilter:
                     break;
                 case CompressionFilter.InstructionFilter4108:
-                    result.Add(Tuple.Create(new InnoExeDecoder4108() as object, 8192));
+                    result.Push(new InnoExeDecoder4108(), 8192);
                     break;
                 case CompressionFilter.InstructionFilter5200:
-                    result.Add(Tuple.Create(new InnoExeDecoder5200(false) as object, 8192));
+                    result.Push(new InnoExeDecoder5200(false), 8192);
                     break;
                 case CompressionFilter.InstructionFilter5309:
-                    result.Add(Tuple.Create(new InnoExeDecoder5200(true) as object, 8192));
+                    result.Push(new InnoExeDecoder5200(true), 8192);
                     break;
                 case CompressionFilter.ZlibFilter:
                     // applied *after* calculating the checksum
                     break;
             }
 
-            result.Add(Tuple.Create(RestrictedSource.Restrict(input, file.Size) as object, 0));
+            result.Push(RestrictedSource.Restrict(input, (long)file.Size), 0);
 
-            // result.exception(std::ios_base::badbit);
+            result.Exceptions(std::ios_base::badbit);
 
             return result;
         }

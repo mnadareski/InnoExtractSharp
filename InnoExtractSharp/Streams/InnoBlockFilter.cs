@@ -20,7 +20,6 @@
 
 using System;
 using System.IO;
-using System.Text;
 using InnoExtractSharp.Crypto;
 using InnoExtractSharp.Util;
 
@@ -35,95 +34,71 @@ namespace InnoExtractSharp.Streams
     /// 
     /// block_error is also thrown if there is trailing data: 0 < (total size % (4096 + 4)) < 5
     /// </summary>
-    public class InnoBlockFilter
+    public class InnoBlockFilter : IFilter
     {
         /// <summary>
         /// Current read position in the buffer
         /// </summary>
-        public int Pos;
+        private int pos;
 
         /// <summary>
         /// Length of the buffer. This is always 4096 except for the last chunk
         /// </summary>
-        public int BufferLength;
+        private int length;
 
-        private byte[] Buffer = new byte[4096];
+        private byte[] buffer = new byte[4096];
 
         public InnoBlockFilter()
         {
-            Pos = 0;
-            BufferLength = 0;
+            pos = 0;
+            length = 0;
         }
 
-        public bool ReadChunk(Stream src)
+        public int Read(Stream src, byte[] dest, int offset, int n)
         {
-            using (BinaryReader br = new BinaryReader(src, Encoding.Default, true))
+            int nread = 0;
+            while (n > 0)
             {
-                byte[] temp = new byte[sizeof(uint)];
-                int tempSize = temp.Length;
-                int nread = src.Read(temp, 0, tempSize);
+                if (pos == length && !ReadChunk(src))
+                    return nread > 0 ? nread : -1;
 
-                if (nread == 0)
-                    return false;
-                else if (nread != temp.Length)
-                    throw new Exception("Unexpcted block end"); // TODO: We don't want to do this
+                int size = Math.Min(n, length - pos);
 
-                LittleEndian le = new LittleEndian();
-                uint blockCrc32 = le.LoadUInt32(temp, 0);
+                Array.Copy(buffer, pos, dest, nread, size);
 
-                BufferLength = src.Read(Buffer, 0, Buffer.Length);
-                if (Length == 0)
-                    throw new Exception("Unexpected block end"); // TODO: We don't want to do this
-
-                CRC32 actual = new CRC32();
-                actual.Init();
-                actual.Update(Buffer, 0, BufferLength);
-                if (actual.Finalize() != blockCrc32)
-                    throw new Exception("Block CRC32 mismatch"); // TODO: We don't want to do this
-
-                Pos = 0;
-                return true;
-            }
-        }
-
-        public override int Read(byte[] buffer, int offset, int count)
-        {
-            int read = 0;
-            while (count > 0)
-            {
-                if (Pos == BufferLength && !ReadChunk(this))
-                    return read > 0 ? read : -1;
-
-                int size = Math.Min(count, BufferLength - Pos);
-
-                Array.Copy(Buffer, Pos, buffer, read, size);
-
-                Pos += size;
-                count -= size;
-                read += size;
+                pos += size;
+                n -= size;
+                nread += size;
             }
 
-            return read;
+            return nread;
         }
 
-        public override void Flush()
+        private bool ReadChunk(Stream src)
         {
-            throw new NotImplementedException();
-        }
+            byte[] temp = new byte[sizeof(uint)];
+            int tempSize = temp.Length;
+            int nread = src.Read(temp, 0, tempSize);
 
-        public override long Seek(long offset, SeekOrigin origin)
-        {
-            throw new NotImplementedException();
-        }
+            if (nread == 0)
+                return false;
+            else if (nread != temp.Length)
+                throw new Exception("Unexpcted block end");
 
-        public override void SetLength(long value)
-        {
-            throw new NotImplementedException();
-        }
+            uint blockCrc32 = new LittleEndian<uint>().Load(temp, 0);
 
-        public override void Write(byte[] buffer, int offset, int count)
-        {
-            throw new NotImplementedException();
+            length = src.Read(buffer, 0, buffer.Length);
+            if (length == 0)
+                throw new Exception("Unexpected block end");
+
+            CRC32 actual = new CRC32();
+            actual.Init();
+            actual.Update(buffer, 0, length);
+            if (actual.Finalize() != blockCrc32)
+                throw new Exception("Block CRC32 mismatch");
+
+            pos = 0;
+            return true;
         }
     }
 }

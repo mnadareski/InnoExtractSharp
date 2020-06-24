@@ -19,31 +19,26 @@
  */
 
 using System.IO;
-using System.Linq;
 using InnoExtractSharp.Crypto;
 
 namespace InnoExtractSharp.Streams
 {
-    public class InnoArc4Crypter
+    public class InnoArc4Crypter : IFilter
     {
         private ARC4 arc4;
 
-        public InnoArc4Crypter(string key, int length)
+        public InnoArc4Crypter(byte[] key, int length)
         {
             arc4 = new ARC4();
             arc4.Init(key, length);
             arc4.Discard(1000);
         }
 
-        public int Read(Stream src, ref byte[] dest, int n)
+        public int Read(Stream src, byte[] dest, int offset, int n)
         {
-            int length = src.Read(dest, 0, n);
+            int length = src.Read(dest, offset, n);
             if (length != 0)
-            {
-                char[] destChar = new char[dest.Length];
-                arc4.Crypt(dest.Select(b => (char)b).ToArray(), ref destChar, n);
-                dest = destChar.Select(c => (byte)c).ToArray();
-            }
+                arc4.Crypt(dest, dest, n);
 
             return length;
         }

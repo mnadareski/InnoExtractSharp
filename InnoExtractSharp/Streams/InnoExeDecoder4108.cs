@@ -18,7 +18,6 @@
  * 3. This notice may not be removed or altered from any source distribution.
  */
 
-using System;
 using System.IO;
 
 namespace InnoExtractSharp.Streams
@@ -29,77 +28,52 @@ namespace InnoExtractSharp.Streams
     /// Essentially, it tries to change the addresses stored for x86 CALL and JMP instructions
     /// to be relative to the instruction's position.
     /// </summary>
-    public class InnoExeDecoder4108
+    public class InnoExeDecoder4108 : IFilter
     {
-        private uint Addr;
-        private int AddrBytesLeft;
-        private uint AddrOffset;
+        private uint addr;
+        private int addrBytesLeft;
+        private uint addrOffset;
 
         public InnoExeDecoder4108()
-            : base()
         {
             Close();
         }
 
-        public override int Read(byte[] buffer, int offset, int count)
+        public int Read(Stream src, byte[] dest, int offset, int n)
         {
-            int bufferPtr = offset;
-
-            for (int i = 0; i < count; i++, AddrOffset++)
+            for (int i = 0; i < n; i++, addrOffset++)
             {
-                if (this.Position == this.Length - 1)
-                    return (i > 0 ? i : -1);
-                int byt = this.ReadByte();
+                int byt = src.ReadByte();
+                if (byt == -1) { return i > 0 ? i : -1; }
 
-                if (AddrBytesLeft == 0)
+                if (addrBytesLeft == 0)
                 {
                     // Check if this is a CALL or JMP instruction
                     if (byt == 0xe8 || byt == 0xe9)
                     {
-                        Addr = ~AddrOffset + 1;
-                        AddrBytesLeft = 4;
+                        addr = ~addrOffset + 1;
+                        addrBytesLeft = 4;
                     }
                 }
                 else
                 {
-                    Addr += (byte)byt;
-                    byt = (int)Addr;
-                    Addr >>= 8;
-                    AddrBytesLeft--;
+                    addr += (byte)byt;
+                    byt = (int)addr;
+                    addr >>= 8;
+                    addrBytesLeft--;
                 }
 
-                buffer[bufferPtr++] = (byte)byt;
+                dest[offset++] = (byte)byt;
             }
 
-            return count;
+            return n;
         }
 
-        public override void Close()
+        public void Close()
         {
-            Addr = 0;
-            AddrBytesLeft = 0;
-            AddrOffset = 0;
-            base.Close();
-        }
-
-        public override void Flush()
-        {
-            throw new NotImplementedException();
-        }
-
-        public override long Seek(long offset, SeekOrigin origin)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override void SetLength(long value)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override void Write(byte[] buffer, int offset, int count)
-        {
-            throw new NotImplementedException();
+            addr = 0;
+            addrBytesLeft = 0;
+            addrOffset = 0;
         }
     }
 }

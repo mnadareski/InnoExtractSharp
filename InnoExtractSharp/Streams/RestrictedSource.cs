@@ -20,7 +20,6 @@
 
 using System;
 using System.IO;
-using System.Linq;
 
 namespace InnoExtractSharp.Streams
 {
@@ -28,42 +27,38 @@ namespace InnoExtractSharp.Streams
     /// Wrapper class for a boost::iostreams-compatible source that can be used to restrict
     /// sources to appear smaller than they really are.
     /// </summary>
-    public class RestrictedSource
+    public class RestrictedSource : IFilter
     {
-        public Stream BaseSource;   //!< The base source to read from.
-        public ulong Remaining;     //!< Number of bytes remaining in the restricted source.
+        private Stream baseSource;   //!< The base source to read from.
+        private long remaining;     //!< Number of bytes remaining in the restricted source.
 
         public RestrictedSource(RestrictedSource o)
         {
-            BaseSource = o.BaseSource;
-            Remaining = o.Remaining;
+            baseSource = o.baseSource;
+            remaining = o.remaining;
         }
 
-        public RestrictedSource(Stream source, ulong size)
+        public RestrictedSource(Stream source, long size)
         {
-            BaseSource = source;
-            Remaining = size;
+            baseSource = source;
+            remaining = size;
         }
 
-        public int Read(ref char[] buffer, int bufferPtr, int bytes)
+        public int Read(Stream _, byte[] buffer, int offset, int bytes)
         {
             if (bytes <= 0)
                 return 0;
 
             // Restrict the number of bytes to read
-            bytes = (int)Math.Min((ulong)bytes, Remaining);
+            bytes = (int)Math.Min(bytes, remaining);
             if (bytes == 0)
                 return -1; // End of the restricted source reached
 
-            byte[] byteBuffer = new byte[bytes];
-            int nread = BaseSource.Read(byteBuffer, bufferPtr, bytes);
+            int nread = baseSource.Read(buffer, offset, bytes);
 
             // Remember how many bytes were read so far
             if (nread > 0)
-            {
-                Array.Copy(byteBuffer.Select(b => (char)b).ToArray(), 0, buffer, bufferPtr, bytes);
-                Remaining -= Math.Min((ulong)nread, Remaining);
-            }
+                remaining -= Math.Min(nread, remaining);
 
             return nread;
         }
@@ -74,7 +69,7 @@ namespace InnoExtractSharp.Streams
         /// 
         /// Like boost::iostreams::restrict, but always has a 64-bit counter.
         /// </summary>
-        public static RestrictedSource Restrict(Stream source, ulong size)
+        public static RestrictedSource Restrict(Stream source, long size)
         {
             return new RestrictedSource(source, size);
         }
