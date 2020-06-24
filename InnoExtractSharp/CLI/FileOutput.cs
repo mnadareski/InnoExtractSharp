@@ -21,7 +21,6 @@
 using System;
 using System.IO;
 using InnoExtractSharp.Crypto;
-using InnoExtractSharp.Util;
 
 namespace InnoExtractSharp.CLI
 {
@@ -29,7 +28,7 @@ namespace InnoExtractSharp.CLI
     {
         private string path_;
         private ProcessedFile file_;
-        private FStream stream_;
+        private FileStream stream_;
 
         private Hasher checksum_;
         private ulong checksumPosition_;
@@ -53,8 +52,8 @@ namespace InnoExtractSharp.CLI
             {
                 try
                 {
-                    stream_.Open(path_);
-                    if (!stream_.IsOpen())
+                    stream_ = new FileStream(path_, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite);
+                    if (!stream_.CanRead)
                         throw new Exception();
                 }
                 catch
@@ -67,7 +66,7 @@ namespace InnoExtractSharp.CLI
         public bool Write(byte[] data, int n)
         {
             if (write_)
-                stream_.Write(data, n);
+                stream_.Write(data, 0, n);
 
             if (checksumPosition_ == position_)
             {
@@ -96,15 +95,15 @@ namespace InnoExtractSharp.CLI
 
             if (newPosition <= max)
             {
-                stream_.Seek(newPosition, SeekOrigin.Begin);
+                stream_.Seek((long)newPosition, SeekOrigin.Begin);
             }
             else
             {
-                Fstream.OffType sign = (newPosition > position_) ? 1 : -1;
+                int sign = (newPosition > position_) ? 1 : -1;
                 ulong diff = (newPosition > position_) ? newPosition - position_ : position_ - newPosition;
                 while (diff > 0)
                 {
-                    stream_.SeekP(sign * (Fstream.OffType)(Math.Min(diff, max)), SeekOrigin.Current);
+                    stream_.Seek(sign * (int)Math.Min(diff, max), SeekOrigin.Current);
                     diff -= Math.Min(diff, max);
                 }
             }
@@ -118,7 +117,7 @@ namespace InnoExtractSharp.CLI
                 stream_.Close();
         }
 
-        public string Path() { return path_; }
+        public string OutputPath() { return path_; }
 
         public ProcessedFile File() { return file_; }
 

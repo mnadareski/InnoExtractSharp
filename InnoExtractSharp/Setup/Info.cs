@@ -58,7 +58,7 @@ namespace InnoExtractSharp.Setup
 
         public InnoVersion Version;
 
-        public uint Codepage;
+        public KnownCodepage Codepage;
 
         public Header Header;
 
@@ -104,7 +104,7 @@ namespace InnoExtractSharp.Setup
         ///     \ref loader::offsets::header_offset.</param>
         /// <param name="entries">What kinds of entries to load.</param>
         /// <param name="forceCodepage">Windows codepage to use for strings in ANSI installers.</param>
-        public void Load(Stream input, EntryTypes entries, int forceCodepage = 0)
+        public void Load(Stream input, EntryTypes entries, uint forceCodepage = 0)
         {
             Version.Load(input);
 
@@ -236,15 +236,15 @@ namespace InnoExtractSharp.Setup
             if (Version.IsUnicode())
             {
                 // Unicode installers are always UTF16-LE, do not allow users to override that.
-                Codepage = Utility.CP_UTF16LE;
+                Codepage = KnownCodepage.cp_utf16le;
             }
             else if (forceCodepage != 0)
             {
-                Codepage = forceCodepage;
+                Codepage = (KnownCodepage)forceCodepage;
             }
             else if (Languages.Count == 0)
             {
-                Codepage = Utility.CP_Windows1252;
+                Codepage = KnownCodepage.cp_windows1252;
             }
             else
             {
@@ -254,9 +254,9 @@ namespace InnoExtractSharp.Setup
                 Codepage = Languages[0].Codepage;
                 foreach (LanguageEntry language in Languages)
                 {
-                    if (language.Codepage == Utility.CP_Windows1252)
+                    if (language.Codepage == KnownCodepage.cp_windows1252)
                     {
-                        Codepage = Utility.CP_Windows1252;
+                        Codepage = KnownCodepage.cp_windows1252;
                         break;
                     }
                 }
@@ -293,7 +293,7 @@ namespace InnoExtractSharp.Setup
             CheckIsEnd(input, "unknown data at end of primary header stream");
             reader = BlockReader.Get(input, Version);
 
-            LoadEntries(reader)
+            LoadEntries(reader);
         }
 
         private void LoadEntries(Stream input, EntryTypes entries, int count, List<Entry> result, EntryTypes entryType)

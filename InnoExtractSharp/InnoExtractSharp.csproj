@@ -140,19 +140,26 @@
     <Compile Include="Streams\InnoBlockFilter.cs" />
     <Compile Include="Streams\InnoFile.cs" />
     <Compile Include="Streams\LzmaDecompressor.cs" />
+    <Compile Include="Util\AnsiConsoleParser.cs" />
     <Compile Include="Util\AnsiString.cs" />
     <Compile Include="ArrayExtensions.cs" />
+    <Compile Include="Util\BigEndian.cs" />
     <Compile Include="Util\BinaryString.cs" />
     <Compile Include="Util\EncodedString.cs" />
     <Compile Include="Util\Endianness.cs" />
     <Compile Include="Util\Flags.cs" />
     <Compile Include="Util\InnoEnum.cs" />
-    <Compile Include="Util\StoredEnum.cs" />
-    <Compile Include="Util\Utility.cs" />
+    <Compile Include="Util\LittleEndian.cs" />
+    <Compile Include="Util\SafeShifter.cs" />
+    <Compile Include="Util\Utility.Math.cs" />
+    <Compile Include="Util\Utility.Load.cs" />
+    <Compile Include="Util\Utility.Alignment.cs" />
+    <Compile Include="Util\Utility.Endian.cs" />
   </ItemGroup>
   <ItemGroup />
   <ItemGroup>
     <None Include="packages.config" />
+    <Compile Include="Util\Utility.Encoding.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

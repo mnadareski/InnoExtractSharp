@@ -1,6 +1,5 @@
 ﻿/*
- * Copyright (C) 2011-2014 Daniel Scharrer
- * Converted code Copyright (C) 2018 Matt Nadareski
+ * Copyright (C) 2011-2020 Daniel Scharrer
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the author(s) be held liable for any damages
@@ -19,6 +18,7 @@
  * 3. This notice may not be removed or altered from any source distribution.
  */
 
+using System.Collections;
 using System.IO;
 using System.Text;
 
@@ -28,43 +28,51 @@ namespace InnoExtractSharp.Util
     /// Wrapper to load a length-prefixed string with a specified encoding from an input stream
     /// into a UTF-8 encoded std::string.
     /// The string length is stored as 32-bit integer.
+    /// 
+    /// You can also use the \ref ansi_string convenience wrapper for Windows-1252 strings.
     /// </summary>
     public class EncodedString
     {
         public string Data;
-        public int Codepage;
+        public KnownCodepage Codepage;
+        public BitArray LeadByteSet;
 
-        public EncodedString(string target, int codepage)
+        /// <param name="target">The std::string object to receive the loaded UTF-8 string.</param>
+        /// <param name="codepage">The Windows codepage for the encoding of the stored string.</param>
+        public EncodedString(string target, KnownCodepage codepage)
         {
             Data = target;
             Codepage = codepage;
+            LeadByteSet = null;
+        }
+
+        /// <param name="target">The std::string object to receive the loaded UTF-8 string.</param>
+        /// <param name="codepage">The Windows codepage for the encoding of the stored string.</param>
+        /// <param name="leadBytes">Preserve 0x5C path separators.</param>
+        public EncodedString(string target, KnownCodepage codepage, BitArray leadBytes)
+        {
+            Data = target;
+            Codepage = codepage;
+            LeadByteSet = leadBytes;
         }
 
         /// <summary>
         /// Load and convert a length-prefixed string
         /// </summary>
-        public static void Load(Stream input, out string target, int codepage)
+        /// <remarks>This function is not thread-safe.</remarks>
+        public static void Load(Stream input, out string target, KnownCodepage codepage, BitArray leadBytes = null)
         {
-            try
-            {
-                using (BinaryReader br = new BinaryReader(input, Encoding.GetEncoding(codepage), true))
-                {
-                    target = br.ReadString();
-                }
-            }
-            catch
-            {
-                target = null;
-                return;
-            }
+            BinaryString.Load(input, out target);
+            Utility.ToUtf8(target, codepage);
         }
 
         /// <summary>
         /// Load and convert a length-prefixed string
         /// </summary>
-        public static string Load(Stream input, int codepage)
+        /// <remarks>This function is not thread-safe.</remarks>
+        public static string Load(Stream input, KnownCodepage codepage, BitArray leadBytes = null)
         {
-            Load(input, out string target, codepage);
+            Load(input, out string target, codepage, leadBytes);
             return target;
         }
     }

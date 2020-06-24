@@ -1,6 +1,5 @@
 ﻿/*
- * Copyright (C) 2011-2014 Daniel Scharrer
- * Converted code Copyright (C) 2018 Matt Nadareski
+ * Copyright (C) 2011-2017 Daniel Scharrer
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the author(s) be held liable for any damages
@@ -19,27 +18,40 @@
  * 3. This notice may not be removed or altered from any source distribution.
  */
 
-using System.IO;
+using System.Runtime.InteropServices;
 
 namespace InnoExtractSharp.Util
 {
     /// <summary>
-    /// Convenience specialization of \ref encoded_string for loading Windows-1252 strings
+    /// functions for dealing with different endiannesses.
     /// </summary>
-    /// <remarks>This function is not thread-safe.</remarks>
-    public class AnsiString : EncodedString
+    public partial class Utility
     {
-        public AnsiString(string target)
-            : base(target, KnownCodepage.cp_windows1252)
+        /// <summary>
+        /// Get the alignment of a type.
+        /// </summary>
+        public static int AlignmentOf(object o)
         {
+            return Marshal.SizeOf(o);
         }
 
         /// <summary>
-        /// Load and convert a length-prefixed string
+        /// Check if a pointer has aparticular alignment.
         /// </summary>
-        public static void Load(Stream input, out string target)
+        public static bool IsAlignedOn(byte[] p, int alignment)
         {
-            Load(input, out target, KnownCodepage.cp_windows1252);
+            return alignment == 1
+                || (IsPowerOf2(alignment)
+                    ? ModPowerOf2(p.Length, alignment) == 0
+                    : (p.Length % alignment) == 0);
+        }
+
+        /// <summary>
+        /// Check if a pointer is aligned for a specific type.
+        /// </summary>
+        public static bool IsAligned(byte[] p, object o)
+        {
+            return IsAlignedOn(p, AlignmentOf(o));
         }
     }
 }

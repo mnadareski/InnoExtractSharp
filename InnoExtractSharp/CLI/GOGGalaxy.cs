@@ -278,7 +278,7 @@ namespace InnoExtractSharp.CLI
         /// 
         /// Additionally, language constrained are also parsed from check scripts and added to the language list.
         /// </summary>
-        public void ParseGalaxyFiles(Info info, bool force)
+        public static void ParseGalaxyFiles(Info info, bool force)
         {
             if (!force)
             {

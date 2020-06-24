@@ -20,6 +20,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -34,7 +35,7 @@ namespace InnoExtractSharp.CLI
     public class Gog
     {
         /// <returns>the GOG.com game ID for this installer or an empty string</returns>
-        public string GetGameId(Info info)
+        public static string GetGameId(Info info)
         {
             string id = string.Empty;
 
@@ -51,8 +52,7 @@ namespace InnoExtractSharp.CLI
 
                 if (string.Equals(entry.Name, "gameID", StringComparison.OrdinalIgnoreCase))
                 {
-                    id = entry.Value;
-                    Utility.ToUtf8(id, info.Codepage);
+                    id = Utility.ToUtf8(entry.Value, (KnownCodepage)info.Codepage);
                     break;
                 }
 
@@ -79,7 +79,7 @@ namespace InnoExtractSharp.CLI
         internal static bool ProcessFileUnrar(string file, ExtractOptions o, string password)
         {
             List<string> args = new List<string>();
-            args.Add("unrar");
+            string program = "unrar";
 
             if (o.Extract)
                 args.Add("x");
@@ -96,8 +96,8 @@ namespace InnoExtractSharp.CLI
 
             args.Add("-idc"); // Disable copyright header
 
-            if (!Progress.IsEnabled())
-                args.Add("-idp"); // Disable progress display
+            //if (!Progress.IsEnabled())
+            //    args.Add("-idp"); // Disable progress display
 
             if (o.Filenames.IsLowercase())
                 args.Add("-cl"); // Connvert filenames to lowercase
@@ -129,17 +129,18 @@ namespace InnoExtractSharp.CLI
 
             // args.Add(null);
 
-            int ret = Utility.Run(args);
-            if (ret < 0)
+            Process process = Process.Start(program, string.Join(" ", args));
+            process.WaitForExit();
+            if (process.ExitCode < 0)
             {
-                args[0] = "rar";
-                ret = Utility.Run(args);
-                if (ret < 0)
+                process = Process.Start("rar", string.Join(" ", args));
+                process.WaitForExit();
+                if (process.ExitCode < 0)
                     return false;
             }
 
-            if (ret > 0)
-                throw new Exception($"Could not {GetVerb(o)} \"{file}\": unrar failed");
+            if (process.ExitCode > 0)
+                throw new Exception($"Could not {GetVerb(o)} \"{file}\": unrar failed");   
 
             return true;
         }
@@ -148,10 +149,11 @@ namespace InnoExtractSharp.CLI
         {
             string dir = o.OutputDir;
 
+            string program = string.Empty;
             List<string> args = new List<string>();
             if (o.Extract)
             {
-                args.Add("unar");
+                program = "unar";
 
                 args.Add("-f"); // Overwrite existing files
 
@@ -168,7 +170,7 @@ namespace InnoExtractSharp.CLI
             }
             else
             {
-                args.Add("lsar");
+                program = "lsar";
 
                 if (o.Test)
                     args.Add("-t");
@@ -186,11 +188,12 @@ namespace InnoExtractSharp.CLI
 
             //args.Add(null);
 
-            int ret = Utility.Run(args);
-            if (ret < 0)
+            Process process = Process.Start(program, string.Join(" ", args));
+            process.WaitForExit();
+            if (process.ExitCode < 0)
                 return false;
 
-            if (ret > 0)
+            if (process.ExitCode > 0)
                 throw new Exception($"Could not {GetVerb(o)} \"{file}\": unar failed");
 
             return true;
@@ -257,7 +260,7 @@ namespace InnoExtractSharp.CLI
                 {
                     string here = Environment.CurrentDirectory;
 
-                    string basename = Utility.AsString(files[0]);
+                    string basename = files[0];
                     if (basename.EndsWith("-1"))
                         basename = basename.Substring(0, basename.Length - 2);
 
@@ -294,19 +297,19 @@ namespace InnoExtractSharp.CLI
 
         internal static void ProcessBinFiles(List<string> files, ExtractOptions o, Info info)
         {
-            IfStream ifs = new IfStream(files[0]); // util::ifstream ifs(files.front(), std::ios_base::in | std::ios_base::binary);
-            if (!ifs.IsOpen())
+            FileStream ifs = new FileStream(files[0], FileMode.Open, FileAccess.Read);
+            if (!ifs.CanRead)
                 throw new Exception($"Could not open file \"{files[0]}\"");
 
             byte[] magic = new byte[4];
-            if (!ifs.Read(magic, magic.Length).Fail())
+            if (ifs.Read(magic, 0, magic.Length) == 0)
             {
                 string magicString = new string(magic.Select(b => (char)b).ToArray());
                 if (magicString.StartsWith("Rar!"))
                 {
                     ifs.Close();
                     ProcessRarFiles(files, o, info);
-                    return
+                    return;
                 }
 
                 if (magicString.StartsWith("MZ"))
@@ -373,7 +376,7 @@ namespace InnoExtractSharp.CLI
             return count;
         }
 
-        public void ProbeBinFiles(ExtractOptions o, Info info, string setupFile, bool external)
+        public static void ProbeBinFiles(ExtractOptions o, Info info, string setupFile, bool external)
         {
             string dir = Path.GetDirectoryName(setupFile);
             string basename = Path.GetFileNameWithoutExtension(setupFile);

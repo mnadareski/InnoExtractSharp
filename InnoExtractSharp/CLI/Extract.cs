@@ -612,7 +612,7 @@ namespace InnoExtractSharp.CLI
             }
         }
 
-        public void ProcessFile(string installer, ExtractOptions o)
+        public static void ProcessFile(string installer, ExtractOptions o)
         {
             bool isDirectory;
             try
@@ -627,11 +627,11 @@ namespace InnoExtractSharp.CLI
             if (isDirectory)
                 throw new Exception($"Input file \"{installer}\" is a directory!");
 
-            IfStream ifs;
+            FileStream ifs;
             try
             {
-                ifs.Open(installer); // ifs.open(installer, std::ios_base::in | std::ios_base::binary);
-                if (!ifs.IsOpen())
+                ifs = new FileStream(installer, FileMode.Open, FileAccess.Read);
+                if (!ifs.CanRead)
                     throw new Exception();
             }
             catch
@@ -642,16 +642,10 @@ namespace InnoExtractSharp.CLI
             Offsets offsets = new Offsets();
             offsets.Load(ifs);
 
-            if (Logger.Debug)
-            {
-                Debug.PrintOffsets(offsets);
-                Console.WriteLine();
-            }
-
             if (o.DataVersion)
             {
                 InnoVersion version = new InnoVersion();
-                ifs.SeekG(offsets.HeaderOffset);
+                ifs.Seek(offsets.HeaderOffset, SeekOrigin.Begin);
                 version.Load(ifs);
                 if (o.Silent)
                     Console.WriteLine(version);
@@ -664,7 +658,6 @@ namespace InnoExtractSharp.CLI
             if (o.DumpHeaders)
             {
                 CreateOutputDirectory(o);
-                Debug.DumpHeaders(ifs, offsets, o);
                 return;
             }
 
@@ -685,10 +678,7 @@ namespace InnoExtractSharp.CLI
             if (!o.ExtractUnknown)
                 entries |= Info.EntryTypes.NoUnknownVersion;
 
-            if (Logger.Debug)
-                entries = Int32.MaxValue;
-
-            ifs.SeekG(offsets.HeaderOffset);
+            ifs.Seek(offsets.HeaderOffset, SeekOrigin.Begin);
             Info info = new Info();
             try
             {
@@ -725,7 +715,7 @@ namespace InnoExtractSharp.CLI
             }
 
             if (o.GogGalaxy && (o.List || o.Test || o.Extract || o.ListLanguages))
-                Gog.ParseGalaxyFiles(info, o.Gog);
+                GogGalaxy.ParseGalaxyFiles(info, o.Gog);
 
             bool multipleSections = PrintFileInfo(o, info);
 
@@ -737,7 +727,7 @@ namespace InnoExtractSharp.CLI
             }
             else
             {
-                Utility.FromUtf8(o.Password, out password, info.Codepage);
+                password = Utility.FromUtf8(o.Password, (KnownCodepage)info.Codepage);
                 if ((info.Header.Options & Header.Flags.Password) != 0)
                 {
                     Hasher checksum = new Hasher(info.Header.Password.Type);
@@ -879,8 +869,6 @@ namespace InnoExtractSharp.CLI
                 }
             }
 
-            Progress extractProgress(totalSize); // progress extract_progress(total_size);
-
             MultiPartOutputs multiOutputs = new MultiPartOutputs();
 
             foreach (var chunk in chunks)
@@ -902,19 +890,17 @@ namespace InnoExtractSharp.CLI
                     {
                         Console.WriteLine($"discarding {file.Offset - offset:x} @ {offset:x}");
                         if (chunkSource.Get())
-                            Utility.Discard(chunkSource, file.Offset - offset);
+                            Utility.Discard(chunkSource, (uint)(file.Offset - offset));
                     }
 
                     // Print filename and size
                     if (o.List)
                     {
-                        extractProgress.Clear(DeferredClear);
-
                         if (!o.Silent)
                         {
                             bool named = false;
                             ulong size = 0;
-                            Checksum checksum = null;
+                            Checksum localChecksum = null;
                             foreach (OutputLocation output in outputLocations)
                             {
                                 if (output.Second != 0)
@@ -930,10 +916,10 @@ namespace InnoExtractSharp.CLI
 
                                 if (output.First.Entry().Checksum.Type != ChecksumType.None)
                                 {
-                                    if (checksum != null && checksum != output.First.Entry().Checksum)
+                                    if (localChecksum != null && localChecksum != output.First.Entry().Checksum)
                                         Console.WriteLine("Mismatched output checksums");
 
-                                    checksum = output.First.Entry().Checksum;
+                                    localChecksum = output.First.Entry().Checksum;
                                 }
 
                                 if (named)
@@ -970,7 +956,7 @@ namespace InnoExtractSharp.CLI
                                 if (o.ListChecksums)
                                 {
                                     Console.Write(" ");
-                                    PrintChecksumInfo(file, checksum);
+                                    PrintChecksumInfo(file, localChecksum);
                                 }
 
                                 if (chunk.Key.Encryption != EncryptionMethod.Plaintext && string.IsNullOrEmpty(password))
@@ -1003,8 +989,7 @@ namespace InnoExtractSharp.CLI
                             }
                         }
 
-                        bool updated = extractProgress.Update(0, true);
-                        if (!updated && (o.Extract || o.Test))
+                        if (o.Extract || o.Test)
                             Console.OpenStandardOutput().Flush();
                     }
 
@@ -1077,10 +1062,9 @@ namespace InnoExtractSharp.CLI
                             {
                                 bool success = output.Write(buffer, n);
                                 if (!success)
-                                    throw new Exception($"Error writing file \"{output.Path()}\"");
+                                    throw new Exception($"Error writing file \"{output.OutputPath()}\"");
                             }
 
-                            extractProgress.Update(n);
                             outputSize += (ulong)n;
                         }
                     }
@@ -1118,8 +1102,8 @@ namespace InnoExtractSharp.CLI
                         if (o.Extract && o.PreserveFileTimes)
                         {
                             output.Close();
-                            if (!Utility.SetFileTime(output.Path(), filetime, data.TimestampNsec))
-                                Console.Write($"Error setting timestamp on file {output.Path()}");
+                            if (!Utility.SetFileTime(output.OutputPath(), filetime, data.TimestampNsec))
+                                Console.Write($"Error setting timestamp on file {output.OutputPath()}");
                         }
 
                         if (output.File().IsMultipart())
@@ -1144,8 +1128,6 @@ namespace InnoExtractSharp.CLI
                 if (offset < chunk.Key.Size)
                     Console.WriteLine($"discarding {chunk.Key.Size - offset} bytes at the end of chunk @ {offset:x}");
             }
-
-            extractProgress.Clear();
 
             if (multiOutputs.Count != 0)
                 Console.WriteLine("Incomplete multi-part files");

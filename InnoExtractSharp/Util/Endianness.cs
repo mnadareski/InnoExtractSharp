@@ -1,6 +1,5 @@
 ﻿/*
- * Copyright (C) 2011-2014 Daniel Scharrer
- * Converted code Copyright (C) 2018 Matt Nadareski
+ * Copyright (C) 2011-2017 Daniel Scharrer
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the author(s) be held liable for any damages
@@ -20,949 +19,267 @@
  */
 
 using System;
+using System.Diagnostics;
+using System.IO;
+using System.Runtime.InteropServices;
 
 namespace InnoExtractSharp.Util
 {
-    public class Endianness
+    /// <summary>
+    /// Load/store functions for a specific endianness.
+    /// </summary>
+    public abstract class Endianness<T>
     {
-        public bool Native()
+        /// <summary>
+        /// Load a value of type T that is stored with a specific endianness.
+        /// </summary>
+        public static T Load(Stream input, Endianness<T> endianness)
         {
-            return false;
+            byte[] buffer = new byte[Marshal.SizeOf(default(T))];
+            input.Read(buffer, 0, buffer.Length);
+            return endianness.Load(buffer, 0);
         }
 
-        protected bool Reversed()
+        /// <summary>
+        /// Load a value of type T that is stored as little endian.
+        /// </summary>
+        public static T LoadLittleEndian(Stream input)
         {
-            return false;
+            return Load(input, new LittleEndian<T>());
         }
 
-        protected bool IsLittleEndian()
+        /// <summary>
+        /// Load a value of type T that is stored with a specific endianness.
+        /// </summary>
+        /// <param name="input">Input stream to load from.</param>
+        /// <param name="bits">The number of bits used to store the number.</param>
+        public static T Load(Stream input, Endianness<T> endianness, int bits)
+        {
+            T def = default(T);
+            if (bits == 8 && (def is byte || def is sbyte))
+                return Load(input, endianness);
+            if (bits == 16 && (def is ushort || def is short))
+                return Load(input, endianness);
+            if (bits == 32 && (def is uint || def is int))
+                return Load(input, endianness);
+            if (bits == 64 && (def is ulong || def is long))
+                return Load(input, endianness);
+
+            return def;
+        }
+
+        /// <summary>
+        /// Load a value of type T that is stored as little endian.
+        /// </summary>
+        /// <param name="input">Input stream to load from.</param>
+        /// <param name="bits">The number of bits used to store the number.</param>
+        public static T LoadLittleEndian(Stream input, int bits)
+        {
+            return Load(input, new LittleEndian<T>(), bits);
+        }
+
+        /// <summary>
+        /// Load a single integer.
+        /// </summary>
+        /// <param name="buffer">Memory location containing the integer. Will read sizeof(T) bytes.</param>
+        /// <returns>the loaded integer.</returns>
+        public T Load(byte[] buffer, int bufferPtr)
+        {
+            if (Native())
+            {
+                T value = default(T);
+                IntPtr ptr = new IntPtr();
+                Marshal.StructureToPtr<T>(value, ptr, false);
+                Marshal.Copy(buffer, bufferPtr, ptr, Marshal.SizeOf(value));
+                return value;
+            }
+            else
+            {
+                return LoadAlien(buffer, bufferPtr);
+            }
+        }
+
+        /// <summary>
+        /// Load an array of integers.
+        /// </summary>
+        /// <param name="buffer">
+        /// Memory location containing the integers (without padding).
+        /// Will read <code>sizeof(T) * count</code> bytes.
+        /// </param>
+        /// <param name="values">Output array for the loaded integers.</param>
+        /// <param name="count">How many integers to load.</param>
+        public void Load(byte[] buffer, int bufferPtr, ref T[] values, int count)
+        {
+            int valueSize = Marshal.SizeOf(default(T));
+            if (Native() || valueSize == 1)
+            {
+                IntPtr ptr = new IntPtr();
+                Marshal.StructureToPtr<T[]>(values, ptr, false);
+                Marshal.Copy(buffer, bufferPtr, ptr, valueSize * count);
+            }
+            else
+            {
+                for (int i = 0; i < count; i++, bufferPtr += valueSize)
+                {
+                    values[i] = LoadAlien(buffer, bufferPtr);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Store a single integer.
+        /// </summary>
+        /// <param name="value">The integer to store.</param>
+        /// <param name="buffer">Memory location to receive the integer. Will write sizeof(T) bytes.</param>
+        public void Store(T value, ref byte[] buffer, int bufferPtr)
+        {
+            int valueSize = Marshal.SizeOf(default(T));
+            if (Native())
+            {
+                IntPtr ptr = new IntPtr();
+                Marshal.StructureToPtr<T>(value, ptr, false);
+                Marshal.Copy(ptr, buffer, bufferPtr, valueSize);
+            }
+            else
+            {
+                StoreAlien(value, ref buffer, bufferPtr);
+            }
+        }
+
+        /// <summary>
+        /// Store an array of integers.
+        /// </summary>
+        /// <param name="values">The integers to store.</param>
+        /// <param name="count">How many integers to store.</param>
+        /// <param name="buffer">
+        /// Memory location to receive the integers (without padding).
+        /// Will write <code>sizeof(T) * count</code> bytes.
+        /// </param>
+        public void Store(T[] values, int count, ref byte[] buffer, int bufferPtr)
+        {
+            int valueSize = Marshal.SizeOf(default(T));
+            if (Native || valueSize == 1)
+            {
+                IntPtr ptr = new IntPtr();
+                Marshal.StructureToPtr<T[]>(values, ptr, false);
+                Marshal.Copy(ptr, buffer, bufferPtr, valueSize * count);
+            }
+            else
+            {
+                for (int i = 0; i < count; i++, bufferPtr += valueSize)
+                {
+                    StoreAlien<T>(values[i], buffer, bufferPtr);
+                }
+            }
+        }
+    
+        protected virtual bool Reversed() { return false; }
+
+        protected abstract bool Native();
+
+        protected abstract T Decode(byte[] buffer);
+
+        protected abstract void Encode(T value, byte[] buffer, int bufferPtr);
+
+        private T LoadAlien(byte[] buffer, int bufferPtr)
+        {
+            if (Reversed())
+            {
+                T value = default(T);
+                IntPtr ptr = new IntPtr();
+                Marshal.StructureToPtr<T>(value, ptr, false);
+                Marshal.Copy(buffer, bufferPtr, ptr, Marshal.SizeOf(value));
+                return Byteswap(value);
+            }
+            else
+            {
+                return Decode(buffer, bufferPtr);
+            }
+        }
+
+        private void StoreAlien(T value, ref byte[] buffer, int bufferPtr)
+        {
+            if (Reversed())
+            {
+                IntPtr ptr = new IntPtr();
+                Marshal.StructureToPtr<T>(Byteswap(value), ptr, false);
+                Marshal.Copy(ptr, buffer, bufferPtr, Marshal.SizeOf(value));
+            }
+            else
+            {
+                Encode(value, buffer, bufferPtr);
+            }
+        }
+
+        internal static bool IsLittleEndian()
         {
             return BitConverter.IsLittleEndian;
         }
 
-        protected bool IsBigEndian()
+        internal static bool IsBigEndian()
         {
             return !BitConverter.IsLittleEndian;
         }
 
-        #region Byteswap<T>(T value)
-
-        public byte Byteswap(byte value)
+        private T Byteswap(T value)
         {
-            return value;
-        }
-
-        public ushort Byteswap(ushort value)
-        {
-            return ((ushort)(((0xFF00 & value) >> 8) | ((0x00FF & value) << 8)));
-        }
-
-        public short Byteswap(short value)
-        {
-            return ((short)(((0xFF00 & value) >> 8) | ((0x00FF & value) << 8)));
-        }
-
-        public uint Byteswap(uint value)
-        {
-            return ((uint)(((0xFF000000 & value) >> 24) | ((0x00FF0000 & value) >> 8) | ((0x0000FF00 & value) << 8) | ((0x000000FF & value) << 24)));
-        }
-
-        public int Byteswap(int value)
-        {
-            return ((int)(((0xFF000000 & value) >> 24) | ((0x00FF0000 & value) >> 8) | ((0x0000FF00 & value) << 8) | ((0x000000FF & value) << 24)));
-        }
-
-        public ulong Byteswap(ulong value)
-        {
-            return ((0x00000000000000FF) & (value >> 56)
-               | (0x000000000000FF00) & (value >> 40)
-               | (0x0000000000FF0000) & (value >> 24)
-               | (0x00000000FF000000) & (value >> 8)
-               | (0x000000FF00000000) & (value << 8)
-               | (0x0000FF0000000000) & (value << 24)
-               | (0x00FF000000000000) & (value << 40)
-               | (0xFF00000000000000) & (value << 56));
-        }
-
-        public long Byteswap(long value)
-        {
-            unchecked
+            // Int8
+            if (value is byte)
             {
-                return (((0x00000000000000FF) & (value >> 56)
-                   | (0x000000000000FF00) & (value >> 40)
-                   | (0x0000000000FF0000) & (value >> 24)
-                   | (0x00000000FF000000) & (value >> 8)
-                   | (0x000000FF00000000) & (value << 8)
-                   | (0x0000FF0000000000) & (value << 24)
-                   | (0x00FF000000000000) & (value << 40)
-                   | (long)(0xFF00000000000000) & (value << 56)));
+                byte newValue = (value as byte?).Value;
+                byte swapped = Utility.Byteswap(newValue);
+                return (T)Convert.ChangeType(swapped, typeof(T));
             }
-        }
-
-        #endregion
-
-        #region Load<T>(byte[] buffer, int bufferPtr)
-
-        /// <summary>
-        /// Load a single byte
-        /// </summary>
-        public byte LoadByte(byte[] buffer, int bufferPtr)
-        {
-            return buffer[bufferPtr];
-        }
-
-        /// <summary>
-        /// Load a single unsigned short
-        /// </summary>
-        public ushort LoadUInt16(byte[] buffer, int bufferPtr)
-        {
-            if (this.Native())
-                return BitConverter.ToUInt16(buffer, bufferPtr);
-            else
-                return LoadAlienUInt16(buffer, bufferPtr);
-        }
-
-        /// <summary>
-        /// Load a single short
-        /// </summary>
-        public short LoadInt16(byte[] buffer, int bufferPtr)
-        {
-            if (this.Native())
-                return BitConverter.ToInt16(buffer, bufferPtr);
-            else
-                return LoadAlienInt16(buffer, bufferPtr);
-        }
-
-        /// <summary>
-        /// Load a single unsigned integer
-        /// </summary>
-        public uint LoadUInt32(byte[] buffer, int bufferPtr)
-        {
-            if (this.Native())
-                return BitConverter.ToUInt32(buffer, bufferPtr);
-            else
-                return LoadAlienUInt32(buffer, bufferPtr);
-        }
-
-        /// <summary>
-        /// Load a single integer
-        /// </summary>
-        public int LoadInt32(byte[] buffer, int bufferPtr)
-        {
-            if (this.Native())
-                return BitConverter.ToInt32(buffer, bufferPtr);
-            else
-                return LoadAlienInt32(buffer, bufferPtr);
-        }
-
-        /// <summary>
-        /// Load a single unsigned long
-        /// </summary>
-        public ulong LoadUInt64(byte[] buffer, int bufferPtr)
-        {
-            if (this.Native())
-                return BitConverter.ToUInt64(buffer, bufferPtr);
-            else
-                return LoadAlienUInt64(buffer, bufferPtr);
-        }
-
-        /// <summary>
-        /// Load a single long
-        /// </summary>
-        public long LoadInt64(byte[] buffer, int bufferPtr)
-        {
-            if (this.Native())
-                return BitConverter.ToInt64(buffer, bufferPtr);
-            else
-                return LoadAlienInt64(buffer, bufferPtr);
-        }
-
-        #endregion
-
-        #region Load<T>(byte[] buffer, int bufferPtr, ref T[] values, int count)
-
-        /// <summary>
-        /// Load an array of bytes
-        /// </summary>
-        public void LoadByte(byte[] buffer, int bufferPtr, ref byte[] values, int count)
-        {
-            if (this.Native() || values.Length == 1)
-                Array.Copy(buffer, bufferPtr, values, 0, count);
-            else
+            if (value is sbyte)
             {
-                for (int i = 0; i < count; i++)
-                    values[i] = LoadAlienByte(buffer, bufferPtr);
+                sbyte newValue = (value as sbyte?).Value;
+                sbyte swapped = Utility.Byteswap(newValue);
+                return (T)Convert.ChangeType(swapped, typeof(T));
             }
-        }
 
-        /// <summary>
-        /// Load an array of unsigned shorts
-        /// </summary>
-        public void LoadUInt16(byte[] buffer, int bufferPtr, ref ushort[] values, int count)
-        {
-            if (this.Native() || values.Length == 1)
+            // Int16
+            if (value is ushort)
             {
-                for (int i = bufferPtr; i < count; i += sizeof(ushort))
-                    values[i] = BitConverter.ToUInt16(buffer, i);
+                ushort newValue = (value as ushort?).Value;
+                ushort swapped = Utility.Byteswap(newValue);
+                return (T)Convert.ChangeType(swapped, typeof(T));
             }
-            else
+            if (value is short)
             {
-                for (int i = 0; i < count; i++)
-                    values[i] = LoadAlienUInt16(buffer, bufferPtr);
+                short newValue = (value as short?).Value;
+                short swapped = Utility.Byteswap(newValue);
+                return (T)Convert.ChangeType(swapped, typeof(T));
             }
-        }
 
-        /// <summary>
-        /// Load an array of shorts
-        /// </summary>
-        public void LoadInt16(byte[] buffer, int bufferPtr, ref short[] values, int count)
-        {
-            if (this.Native() || values.Length == 1)
+            // Int32
+            if (value is uint)
             {
-                for (int i = bufferPtr; i < count; i += sizeof(ushort))
-                    values[i] = BitConverter.ToInt16(buffer, i);
+                uint newValue = (value as uint?).Value;
+                uint swapped = Utility.Byteswap(newValue);
+                return (T)Convert.ChangeType(swapped, typeof(T));
             }
-            else
+            if (value is int)
             {
-                for (int i = 0; i < count; i++)
-                    values[i] = LoadAlienInt16(buffer, bufferPtr);
+                int newValue = (value as int?).Value;
+                int swapped = Utility.Byteswap(newValue);
+                return (T)Convert.ChangeType(swapped, typeof(T));
             }
-        }
 
-        /// <summary>
-        /// Load an array of unsigned integers
-        /// </summary>
-        public void LoadUInt32(byte[] buffer, int bufferPtr, ref uint[] values, int count)
-        {
-            if (this.Native() || values.Length == 1)
+            // Int64
+            if (value is ulong)
             {
-                for (int i = bufferPtr; i < count; i += sizeof(ushort))
-                    values[i] = BitConverter.ToUInt32(buffer, i);
+                ulong newValue = (value as ulong?).Value;
+                ulong swapped = Utility.Byteswap(newValue);
+                return (T)Convert.ChangeType(swapped, typeof(T));
             }
-            else
+            if (value is long)
             {
-                for (int i = 0; i < count; i++)
-                    values[i] = LoadAlienUInt32(buffer, bufferPtr);
+                long newValue = (value as long?).Value;
+                long swapped = Utility.Byteswap(newValue);
+                return (T)Convert.ChangeType(swapped, typeof(T));
             }
-        }
-
-        /// <summary>
-        /// Load an array of integers
-        /// </summary>
-        public void LoadInt32(byte[] buffer, int bufferPtr, ref int[] values, int count)
-        {
-            if (this.Native() || values.Length == 1)
-            {
-                for (int i = bufferPtr; i < count; i += sizeof(ushort))
-                    values[i] = BitConverter.ToInt32(buffer, i);
-            }
-            else
-            {
-                for (int i = 0; i < count; i++)
-                    values[i] = LoadAlienInt32(buffer, bufferPtr);
-            }
-        }
-
-        /// <summary>
-        /// Load an array of unsigned longs
-        /// </summary>
-        public void LoadUInt64(byte[] buffer, int bufferPtr, ref ulong[] values, int count)
-        {
-            if (this.Native() || values.Length == 1)
-            {
-                for (int i = bufferPtr; i < count; i += sizeof(ushort))
-                    values[i] = BitConverter.ToUInt64(buffer, i);
-            }
-            else
-            {
-                for (int i = 0; i < count; i++)
-                    values[i] = LoadAlienUInt64(buffer, bufferPtr);
-            }
-        }
-
-        /// <summary>
-        /// Load an array of longs
-        /// </summary>
-        public void LoadInt64(byte[] buffer, int bufferPtr, ref long[] values, int count)
-        {
-            if (this.Native() || values.Length == 1)
-            {
-                for (int i = bufferPtr; i < count; i += sizeof(ushort))
-                    values[i] = BitConverter.ToInt64(buffer, i);
-            }
-            else
-            {
-                for (int i = 0; i < count; i++)
-                    values[i] = LoadAlienInt64(buffer, bufferPtr);
-            }
-        }
-
-        #endregion
-
-        #region Store<T>(T value, ref byte[] buffer, int bufferPtr)
-
-        /// <summary>
-        /// Store a single byte
-        /// </summary>
-        public void StoreByte(byte value, ref byte[] buffer, int bufferPtr)
-        {
-            if (this.Native())
-                buffer[bufferPtr] = value;
-            else
-                StoreAlienByte(value, ref buffer, ref bufferPtr);
-        }
-
-        /// <summary>
-        /// Store a single unsigned short
-        /// </summary>
-        public void StoreUInt16(ushort value, ref byte[] buffer, int bufferPtr)
-        {
-            if (this.Native())
-            {
-                foreach (byte b in BitConverter.GetBytes(value))
-                    buffer[bufferPtr++] = b;
-            }
-            else
-                StoreAlienUInt16(value, ref buffer, ref bufferPtr);
-        }
-
-        /// <summary>
-        /// Store a single short
-        /// </summary>
-        public void StoreInt16(short value, ref byte[] buffer, int bufferPtr)
-        {
-            if (this.Native())
-            {
-                foreach (byte b in BitConverter.GetBytes(value))
-                    buffer[bufferPtr++] = b;
-            }
-            else
-                StoreAlienInt16(value, ref buffer, ref bufferPtr);
-        }
-
-        /// <summary>
-        /// Store a single unsigned integer
-        /// </summary>
-        public void StoreUInt32(uint value, ref byte[] buffer, int bufferPtr)
-        {
-            if (this.Native())
-            {
-                foreach (byte b in BitConverter.GetBytes(value))
-                    buffer[bufferPtr++] = b;
-            }
-            else
-                StoreAlienUInt32(value, ref buffer, ref bufferPtr);
-        }
-
-        /// <summary>
-        /// Store a single integer
-        /// </summary>
-        public void StoreInt32(int value, ref byte[] buffer, int bufferPtr)
-        {
-            if (this.Native())
-            {
-                foreach (byte b in BitConverter.GetBytes(value))
-                    buffer[bufferPtr++] = b;
-            }
-            else
-                StoreAlienInt32(value, ref buffer, ref bufferPtr);
-        }
-
-        /// <summary>
-        /// Store a single unsigned long
-        /// </summary>
-        public void StoreUInt64(ulong value, ref byte[] buffer, int bufferPtr)
-        {
-            if (this.Native())
-            {
-                foreach (byte b in BitConverter.GetBytes(value))
-                    buffer[bufferPtr++] = b;
-            }
-            else
-                StoreAlienUInt64(value, ref buffer, ref bufferPtr);
-        }
-
-        /// <summary>
-        /// Store a single long
-        /// </summary>
-        public void StoreInt64(long value, ref byte[] buffer, int bufferPtr)
-        {
-            if (this.Native())
-            {
-                foreach (byte b in BitConverter.GetBytes(value))
-                    buffer[bufferPtr++] = b;
-            }
-            else
-                StoreAlienInt64(value, ref buffer, ref bufferPtr);
-        }
-
-        #endregion
-
-        #region Store<T>(T[] values, int count, byte[] buffer, int bufferPtr)
-
-        /// <summary>
-        /// Store an array of bytes
-        /// </summary>
-        public void StoreByte(byte[] values, int count, ref byte[] buffer, int bufferPtr)
-        {
-            foreach (byte value in values)
-            {
-                if (this.Native())
-                    buffer[bufferPtr++] = value;
-                else
-                    StoreAlienByte(value, ref buffer, ref bufferPtr);
-            }
-        }
-
-        /// <summary>
-        /// Store an array of unsigned shorts
-        /// </summary>
-        public void StoreUInt16(ushort[] values, int count, ref byte[] buffer, int bufferPtr)
-        {
-            foreach (ushort value in values)
-            {
-                if (this.Native())
-                {
-                    foreach (byte b in BitConverter.GetBytes(value))
-                        buffer[bufferPtr++] = b;
-                }
-                else
-                    StoreAlienUInt16(value, ref buffer, ref bufferPtr);
-            }
-        }
-
-        /// <summary>
-        /// Store an array of shorts
-        /// </summary>
-        public void StoreInt16(short[] values, int count, ref byte[] buffer, int bufferPtr)
-        {
-            foreach (short value in values)
-            {
-                if (this.Native())
-                {
-                    foreach (byte b in BitConverter.GetBytes(value))
-                        buffer[bufferPtr++] = b;
-                }
-                else
-                    StoreAlienInt16(value, ref buffer, ref bufferPtr);
-            }
-        }
-
-        /// <summary>
-        /// Store an array of unsigned integers
-        /// </summary>
-        public void StoreUInt32(uint[] values, int count, ref byte[] buffer, int bufferPtr)
-        {
-            foreach (uint value in values)
-            {
-                if (this.Native())
-                {
-                    foreach (byte b in BitConverter.GetBytes(value))
-                        buffer[bufferPtr++] = b;
-                }
-                else
-                    StoreAlienUInt32(value, ref buffer, ref bufferPtr);
-            }
-        }
-
-        /// <summary>
-        /// Store an array of integers
-        /// </summary>
-        public void StoreInt32(int[] values, int count, ref byte[] buffer, int bufferPtr)
-        {
-            foreach (int value in values)
-            {
-                if (this.Native())
-                {
-                    foreach (byte b in BitConverter.GetBytes(value))
-                        buffer[bufferPtr++] = b;
-                }
-                else
-                    StoreAlienInt32(value, ref buffer, ref bufferPtr);
-            }
-        }
-
-        /// <summary>
-        /// Store an array of unsigned longs
-        /// </summary>
-        public void StoreUInt64(ulong[] values, int count, ref byte[] buffer, int bufferPtr)
-        {
-            foreach (ulong value in values)
-            {
-                if (this.Native())
-                {
-                    foreach (byte b in BitConverter.GetBytes(value))
-                        buffer[bufferPtr++] = b;
-                }
-                else
-                    StoreAlienUInt64(value, ref buffer, ref bufferPtr);
-            }
-        }
-
-        /// <summary>
-        /// Store an array of longs
-        /// </summary>
-        public void StoreInt64(long[] values, int count, ref byte[] buffer, int bufferPtr)
-        {
-            foreach (long value in values)
-            {
-                if (this.Native())
-                {
-                    foreach (byte b in BitConverter.GetBytes(value))
-                        buffer[bufferPtr++] = b;
-                }
-                else
-                    StoreAlienInt64(value, ref buffer, ref bufferPtr);
-            }
-        }
-
-        #endregion
-
-        #region LoadAlien<T>(byte[] buffer, int bufferPtr)
-
-        public byte LoadAlienByte(byte[] buffer, int bufferPtr)
-        {
-            if (Reversed())
-                return Byteswap(buffer[bufferPtr]);
-            else
-                return DecodeByte(buffer, bufferPtr);
-        }
-
-        public ushort LoadAlienUInt16(byte[] buffer, int bufferPtr)
-        {
-            if (Reversed())
-                return Byteswap(BitConverter.ToUInt16(buffer, bufferPtr));
-            else
-                return DecodeUInt16(buffer, bufferPtr);
-        }
-
-        public short LoadAlienInt16(byte[] buffer, int bufferPtr)
-        {
-            if (Reversed())
-                return Byteswap(BitConverter.ToInt16(buffer, bufferPtr));
-            else
-                return DecodeInt16(buffer, bufferPtr);
-        }
-
-        public uint LoadAlienUInt32(byte[] buffer, int bufferPtr)
-        {
-            if (Reversed())
-                return Byteswap(BitConverter.ToUInt32(buffer, bufferPtr));
-            else
-                return DecodeUInt32(buffer, bufferPtr);
-        }
-
-        public int LoadAlienInt32(byte[] buffer, int bufferPtr)
-        {
-            if (Reversed())
-                return Byteswap(BitConverter.ToInt32(buffer, bufferPtr));
-            else
-                return DecodeInt32(buffer, bufferPtr);
-        }
-
-        public ulong LoadAlienUInt64(byte[] buffer, int bufferPtr)
-        {
-            if (Reversed())
-                return Byteswap(BitConverter.ToUInt64(buffer, bufferPtr));
-            else
-                return DecodeUInt64(buffer, bufferPtr);
-        }
-
-        public long LoadAlienInt64(byte[] buffer, int bufferPtr)
-        {
-            if (Reversed())
-                return Byteswap(BitConverter.ToInt64(buffer, bufferPtr));
-            else
-                return DecodeInt64(buffer, bufferPtr);
-        }
-
-        #endregion
-
-        #region StoreAlien<T>(T value, byte[] buffer, int bufferPtr)
-
-        public void StoreAlienByte(byte value, ref byte[] buffer, ref int bufferPtr)
-        {
-            if (Reversed())
-                buffer[bufferPtr] = Byteswap(value);
-            else
-                EncodeByte(value, ref buffer, ref bufferPtr);
-        }
-
-        public void StoreAlienUInt16(ushort value, ref byte[] buffer, ref int bufferPtr)
-        {
-            if (Reversed())
-            {
-                foreach (byte b in BitConverter.GetBytes(Byteswap(value)))
-                    buffer[bufferPtr++] = b;
-            }
-            else
-                EncodeUInt16(value, ref buffer, ref bufferPtr);
-        }
-
-        public void StoreAlienInt16(short value, ref byte[] buffer, ref int bufferPtr)
-        {
-            if (Reversed())
-            {
-                foreach (byte b in BitConverter.GetBytes(Byteswap(value)))
-                    buffer[bufferPtr++] = b;
-            }
-            else
-                EncodeInt16(value, ref buffer, ref bufferPtr);
-        }
-
-        public void StoreAlienUInt32(uint value, ref byte[] buffer, ref int bufferPtr)
-        {
-            if (Reversed())
-            {
-                foreach (byte b in BitConverter.GetBytes(Byteswap(value)))
-                    buffer[bufferPtr++] = b;
-            }
-            else
-                EncodeUInt32(value, ref buffer, ref bufferPtr);
-        }
-
-        public void StoreAlienInt32(int value, ref byte[] buffer, ref int bufferPtr)
-        {
-            if (Reversed())
-            {
-                foreach (byte b in BitConverter.GetBytes(Byteswap(value)))
-                    buffer[bufferPtr++] = b;
-            }
-            else
-                EncodeInt32(value, ref buffer, ref bufferPtr);
-        }
-
-        public void StoreAlienUInt64(ulong value, ref byte[] buffer, ref int bufferPtr)
-        {
-            if (Reversed())
-            {
-                foreach (byte b in BitConverter.GetBytes(Byteswap(value)))
-                    buffer[bufferPtr++] = b;
-            }
-            else
-                EncodeUInt64(value, ref buffer, ref bufferPtr);
-        }
-
-        public void StoreAlienInt64(long value, ref byte[] buffer, ref int bufferPtr)
-        {
-            if (Reversed())
-            {
-                foreach (byte b in BitConverter.GetBytes(Byteswap(value)))
-                    buffer[bufferPtr++] = b;
-            }
-            else
-                EncodeInt64(value, ref buffer, ref bufferPtr);
-        }
-
-        #endregion
-
-        #region Decode<T>(byte[] buffer, int bufferPtr)
-
-        protected byte DecodeByte(byte[] buffer, int bufferPtr)
-        {
-            return default(byte);
-        }
-
-        protected ushort DecodeUInt16(byte[] buffer, int bufferPtr)
-        {
-            return default(ushort);
-        }
-
-        protected short DecodeInt16(byte[] buffer, int bufferPtr)
-        {
-            return default(short);
-        }
-
-        protected uint DecodeUInt32(byte[] buffer, int bufferPtr)
-        {
-            return default(uint);
-        }
-
-        protected int DecodeInt32(byte[] buffer, int bufferPtr)
-        {
-            return default(int);
-        }
-
-        protected ulong DecodeUInt64(byte[] buffer, int bufferPtr)
-        {
-            return default(ulong);
-        }
-
-        protected long DecodeInt64(byte[] buffer, int bufferPtr)
-        {
-            return default(long);
-        }
 
-        #endregion
-
-        #region Encode<T>(T value, ref byte[] buffer, ref int bufferPtr)
-
-        protected void EncodeByte(byte value, ref byte[] buffer, ref int bufferPtr)
-        {
-        }
-
-        protected void EncodeUInt16(ushort value, ref byte[] buffer, ref int bufferPtr)
-        {
-        }
-
-        protected void EncodeInt16(short value, ref byte[] buffer, ref int bufferPtr)
-        {
-        }
-
-        protected void EncodeUInt32(uint value, ref byte[] buffer, ref int bufferPtr)
-        {
-        }
-
-        protected void EncodeInt32(int value, ref byte[] buffer, ref int bufferPtr)
-        {
-        }
-
-        protected void EncodeUInt64(ulong value, ref byte[] buffer, ref int bufferPtr)
-        {
-        }
-
-        protected void EncodeInt64(long value, ref byte[] buffer, ref int bufferPtr)
-        {
-        }
-
-        #endregion
-    }
-
-    public class LittleEndian : Endianness
-    {
-        public new bool Native()
-        {
-            return IsLittleEndian();
-        }
-
-        protected new bool Reversed()
-        {
-            return IsBigEndian();
-        }
-
-        #region Decode<T>(byte[] buffer, int bufferPtr)
-
-        protected new byte DecodeByte(byte[] buffer, int bufferPtr)
-        {
-            byte value = 0;
-            for (int i = 0; i < sizeof(byte); i++)
-                value = (byte)(value | ((byte)(buffer[bufferPtr + i]) << (i * 8)));
-            return value;
-        }
-
-        protected new ushort DecodeUInt16(byte[] buffer, int bufferPtr)
-        {
-            ushort value = 0;
-            for (int i = 0; i < sizeof(ushort); i++)
-                value = (ushort)(value | ((ushort)(buffer[bufferPtr + i]) << (i * 8)));
-            return value;
-        }
-
-        protected new short DecodeInt16(byte[] buffer, int bufferPtr)
-        {
-            short value = 0;
-            for (int i = 0; i < sizeof(short); i++)
-                value = (short)(value | ((short)(buffer[bufferPtr + i]) << (i * 8)));
-            return value;
-        }
-
-        protected new uint DecodeUInt32(byte[] buffer, int bufferPtr)
-        {
-            uint value = 0;
-            for (int i = 0; i < sizeof(uint); i++)
-                value = (uint)(value | ((uint)(buffer[bufferPtr + i]) << (i * 8)));
-            return value;
-        }
-
-        protected new int DecodeInt32(byte[] buffer, int bufferPtr)
-        {
-            int value = 0;
-            for (int i = 0; i < sizeof(int); i++)
-                value = (int)(value | ((int)(buffer[bufferPtr + i]) << (i * 8)));
-            return value;
-        }
-
-        protected new ulong DecodeUInt64(byte[] buffer, int bufferPtr)
-        {
-            ulong value = 0;
-            for (int i = 0; i < sizeof(ulong); i++)
-                value = (ulong)(value | ((ulong)(buffer[bufferPtr + i]) << (i * 8)));
-            return value;
-        }
-
-        protected new long DecodeInt64(byte[] buffer, int bufferPtr)
-        {
-            long value = 0;
-            for (int i = 0; i < sizeof(long); i++)
-                value = (long)(value | ((long)(buffer[bufferPtr + i]) << (i * 8)));
-            return value;
-        }
-
-        #endregion
-
-        #region Encode<T>(T value, ref byte[] buffer, ref int bufferPtr)
-
-        protected new void EncodeByte(byte value, ref byte[] buffer, ref int bufferPtr)
-        {
-            for (int i = 0; i < sizeof(byte); i++)
-                buffer[i] = (byte)((value >> (i * 8)) & 0xff);
-        }
-
-        protected new void EncodeUInt16(ushort value, ref byte[] buffer, ref int bufferPtr)
-        {
-            for (int i = 0; i < sizeof(ushort); i++)
-                buffer[i] = (byte)((value >> (i * 8)) & 0xff);
-        }
-
-        protected new void EncodeInt16(short value, ref byte[] buffer, ref int bufferPtr)
-        {
-            for (int i = 0; i < sizeof(short); i++)
-                buffer[i] = (byte)((value >> (i * 8)) & 0xff);
-        }
-
-        protected new void EncodeUInt32(uint value, ref byte[] buffer, ref int bufferPtr)
-        {
-            for (int i = 0; i < sizeof(uint); i++)
-                buffer[i] = (byte)((value >> (i * 8)) & 0xff);
-        }
-
-        protected new void EncodeInt32(int value, ref byte[] buffer, ref int bufferPtr)
-        {
-            for (int i = 0; i < sizeof(int); i++)
-                buffer[i] = (byte)((value >> (i * 8)) & 0xff);
-        }
-
-        protected new void EncodeUInt64(ulong value, ref byte[] buffer, ref int bufferPtr)
-        {
-            for (int i = 0; i < sizeof(ulong); i++)
-                buffer[i] = (byte)((value >> (i * 8)) & 0xff);
-        }
-
-        protected new void EncodeInt64(long value, ref byte[] buffer, ref int bufferPtr)
-        {
-            for (int i = 0; i < sizeof(long); i++)
-                buffer[i] = (byte)((value >> (i * 8)) & 0xff);
-        }
-
-        #endregion
-    }
-
-    public class BigEndian : Endianness
-    {
-        public new bool Native()
-        {
-            return IsBigEndian();
-        }
-
-        protected new bool Reversed()
-        {
-            return IsLittleEndian();
-        }
-
-        #region Decode<T>(byte[] buffer, int bufferPtr)
-
-        protected new byte DecodeByte(byte[] buffer, int bufferPtr)
-        {
-            byte value = 0;
-            for (int i = 0; i < sizeof(byte); i++)
-                value = (byte)(value | (byte)(buffer[i]) << ((sizeof(byte) - i - 1) * 8));
-            return value;
-        }
-
-        protected new ushort DecodeUInt16(byte[] buffer, int bufferPtr)
-        {
-            ushort value = 0;
-            for (int i = 0; i < sizeof(ushort); i++)
-                value = (ushort)(value | (ushort)(buffer[i]) << ((sizeof(ushort) - i - 1) * 8));
-            return value;
-        }
-
-        protected new short DecodeInt16(byte[] buffer, int bufferPtr)
-        {
-            short value = 0;
-            for (int i = 0; i < sizeof(short); i++)
-                value = (short)(value | (short)(buffer[i]) << ((sizeof(short) - i - 1) * 8));
-            return value;
-        }
-
-        protected new uint DecodeUInt32(byte[] buffer, int bufferPtr)
-        {
-            uint value = 0;
-            for (int i = 0; i < sizeof(uint); i++)
-                value = (uint)(value | (uint)(buffer[i]) << ((sizeof(uint) - i - 1) * 8));
-            return value;
-        }
-
-        protected new int DecodeInt32(byte[] buffer, int bufferPtr)
-        {
-            int value = 0;
-            for (int i = 0; i < sizeof(int); i++)
-                value = (int)(value | (int)(buffer[i]) << ((sizeof(int) - i - 1) * 8));
-            return value;
-        }
-
-        protected new ulong DecodeUInt64(byte[] buffer, int bufferPtr)
-        {
-            ulong value = 0;
-            for (int i = 0; i < sizeof(ulong); i++)
-                value = (ulong)(value | (ulong)(buffer[i]) << ((sizeof(ulong) - i - 1) * 8));
-            return value;
-        }
-
-        protected new long DecodeInt64(byte[] buffer, int bufferPtr)
-        {
-            long value = 0;
-            for (int i = 0; i < sizeof(long); i++)
-                value = (long)(value | (long)(buffer[i]) << ((sizeof(long) - i - 1) * 8));
-            return value;
-        }
-
-        #endregion
-
-        #region Encode<T>(T value, ref byte[] buffer, ref int bufferPtr)
-
-        protected new void EncodeByte(byte value, ref byte[] buffer, ref int bufferPtr)
-        {
-            for (int i = 0; i < sizeof(byte); i++)
-                buffer[i] = (byte)((value >> ((sizeof(byte) - i - 1) * 8)) & 0xff);
-        }
-
-        protected new void EncodeUInt16(ushort value, ref byte[] buffer, ref int bufferPtr)
-        {
-            for (int i = 0; i < sizeof(ushort); i++)
-                buffer[i] = (byte)((value >> ((sizeof(ushort) - i - 1) * 8)) & 0xff);
+            return default(T);
         }
-
-        protected new void EncodeInt16(short value, ref byte[] buffer, ref int bufferPtr)
-        {
-            for (int i = 0; i < sizeof(short); i++)
-                buffer[i] = (byte)((value >> ((sizeof(short) - i - 1) * 8)) & 0xff);
-        }
-
-        protected new void EncodeUInt32(uint value, ref byte[] buffer, ref int bufferPtr)
-        {
-            for (int i = 0; i < sizeof(uint); i++)
-                buffer[i] = (byte)((value >> ((sizeof(uint) - i - 1) * 8)) & 0xff);
-        }
-
-        protected new void EncodeInt32(int value, ref byte[] buffer, ref int bufferPtr)
-        {
-            for (int i = 0; i < sizeof(int); i++)
-                buffer[i] = (byte)((value >> ((sizeof(int) - i - 1) * 8)) & 0xff);
-        }
-
-        protected new void EncodeUInt64(ulong value, ref byte[] buffer, ref int bufferPtr)
-        {
-            for (int i = 0; i < sizeof(ulong); i++)
-                buffer[i] = (byte)((value >> ((sizeof(ulong) - i - 1) * 8)) & 0xff);
-        }
-
-        protected new void EncodeInt64(long value, ref byte[] buffer, ref int bufferPtr)
-        {
-            for (int i = 0; i < sizeof(long); i++)
-                buffer[i] = (byte)((value >> ((sizeof(long) - i - 1) * 8)) & 0xff);
-        }
-
-        #endregion
     }
 }

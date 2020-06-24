@@ -1,6 +1,5 @@
 ﻿/*
- * Copyright (C) 2011-2014 Daniel Scharrer
- * Converted code Copyright (C) 2018 Matt Nadareski
+ * Copyright (C) 2011-2020 Daniel Scharrer
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the author(s) be held liable for any damages
@@ -28,11 +27,14 @@ namespace InnoExtractSharp.Util
     /// <summary>
     /// Wrapper to load a length-prefixed string from an input stream into a std::string.
     /// The string length is stored as 32-bit integer.
+    /// 
+    /// Use \ref encoded_string to also convert the string to UTF-8.
     /// </summary>
     public class BinaryString
     {
         public string Data;
 
+        /// <param name="target">The std::string object to receive the loaded string.</param>
         public BinaryString(string target)
         {
             Data = target;
@@ -75,7 +77,7 @@ namespace InnoExtractSharp.Util
                 using (BinaryReader br = new BinaryReader(input, Encoding.Default, true))
                 {
                     uint length = br.ReadUInt32();
-                    br.ReadBytes((int)length);
+                    Utility.Discard(input, length);
                 }
             }
             catch
