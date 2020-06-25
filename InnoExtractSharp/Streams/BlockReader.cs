@@ -20,7 +20,6 @@
 
 using System;
 using System.IO;
-using System.Text;
 using InnoExtractSharp.Crypto;
 using InnoExtractSharp.Setup;
 using InnoExtractSharp.Util;
@@ -102,18 +101,19 @@ namespace InnoExtractSharp.Streams
                 case BlockCompression.Stored:
                     break;
                 case BlockCompression.Zlib:
-                    fis.Push(zlib_decompressor, 8192);
+                    fis.Push(io::zlib_decompressor, 8192);
                     break;
                 case BlockCompression.LZMA1:
                     fis.Push(new InnoLzma1Decompressor(), 8192);
                     break;
             }
 
-            fis.length = 4096;
-            // fis.push(io.restrict(base, 0, storedSize);
-            // fis.exceptions(badbit | failbit);
+            fis.Push(new InnoBlockFilter(), 4096);
 
-            // return pointer(fis.release());
+            fis.Push(RestrictedSource.Restrict(input, storedSize), 0);
+
+            fis.Exceptions(std::ios_base::badbit | std::ios_base::failbit);
+
             return fis;
         }
     }

@@ -143,7 +143,7 @@ namespace InnoExtractSharp.CLI
             if (((newfile.Options & FileEntry.Flags.ConfirmOverwrite) != 0) && !PromptOverwrite())
                 return "user chose not to overwrite";
 
-            if (oldfile.Attributes != UInt32.MaxValue && ((oldfile.Attributes & FileEntry.Flags.ReadOnly) != 0))
+            if (oldfile.Attributes != UInt32.MaxValue && ((oldfile.Attributes & FileEntry.Flags.OverwriteReadOnly) != 0))
             {
                 if (((newfile.Options & FileEntry.Flags.OverwriteReadOnly) == 0) && !PromptOverwrite())
                     return "user chose not to overwrite read-only file";
@@ -154,7 +154,7 @@ namespace InnoExtractSharp.CLI
 
         internal static string ParentDir(string path)
         {
-            int pos = path.LastIndexOf(Setup.PathSep);
+            int pos = path.LastIndexOf(Path.DirectorySeparatorChar);
             if (pos == -1)
                 return string.Empty;
 
@@ -766,7 +766,7 @@ namespace InnoExtractSharp.CLI
                         if (!o.Silent)
                         {
                             Console.Write(" - ");
-                            Console.Write($"\"{path}{Setup.PathSep}\"");
+                            Console.Write($"\"{path}{Path.DirectorySeparatorChar}\"");
                             if (i.Value.HasEntry())
                                 PrintFilterInfo(i.Value.Entry());
 
@@ -774,7 +774,7 @@ namespace InnoExtractSharp.CLI
                         }
                         else
                         {
-                            Console.WriteLine($"{path}{Setup.PathSep}");
+                            Console.WriteLine($"{path}{Path.DirectorySeparatorChar}");
                         }
                     }
 
@@ -843,7 +843,7 @@ namespace InnoExtractSharp.CLI
                 }
             }
 
-            SliceReader sliceReader;
+            SliceReader sliceReader = null;
             if (o.Extract || o.Test)
             {
                 if (offsets.DataOffset != 0)

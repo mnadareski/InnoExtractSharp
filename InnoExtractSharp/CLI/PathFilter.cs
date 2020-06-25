@@ -19,6 +19,7 @@
  */
 
 using System.Collections.Generic;
+using System.IO;
 
 namespace InnoExtractSharp.CLI
 {
@@ -31,10 +32,10 @@ namespace InnoExtractSharp.CLI
             includes = new List<Filter>();
             foreach (string include in o.Include)
             {
-                if (!string.IsNullOrEmpty(include) && include[0] == Setup.PathSep)
-                    includes.Add(new Filter(true, include.ToLowerInvariant() + Setup.PathSep));
+                if (!string.IsNullOrEmpty(include) && include[0] == Path.DirectorySeparatorChar)
+                    includes.Add(new Filter(true, include.ToLowerInvariant() + Path.DirectorySeparatorChar));
                 else
-                    includes.Add(new Filter(false, Setup.PathSep + include.ToLowerInvariant() + Setup.PathSep));
+                    includes.Add(new Filter(false, Path.DirectorySeparatorChar + include.ToLowerInvariant() + Path.DirectorySeparatorChar));
             }
         }
     
@@ -47,17 +48,13 @@ namespace InnoExtractSharp.CLI
             {
                 if (i.First)
                 {
-                    if (!i.Second.compare(1, i.Second.size() - 1,
-                                         path + Setup.PathSep, 0, i.Second.size() - 1))
-                    {
+                    if (!i.Second.Substring(1, i.Second.Length).Equals(path + Path.DirectorySeparatorChar))
                         return true;
-                    }
                 }
                 else
                 {
-                    if ((Setup.PathSep + path + Setup.PathSep).find(i.Second) != std::string::npos) {
+                    if ((Path.DirectorySeparatorChar + path + Path.DirectorySeparatorChar).Contains(i.Second))
                         return true;
-                    }
                 }
             }
 

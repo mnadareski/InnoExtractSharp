@@ -56,11 +56,7 @@ namespace InnoExtractSharp.Streams
         public virtual void Close()
         {
             if (Decoder != null)
-            {
-                LzmaStream strm = Decoder as LzmaStream;
-                LzmaEnd(strm);
-                strm.Dispose(); Decoder.Dispose();
-            }
+                Decoder = null;
         }
     }
 }

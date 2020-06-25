@@ -1,6 +1,5 @@
 ﻿/*
- * Copyright (C) 2011-2014 Daniel Scharrer
- * Converted code Copyright (C) 2018 Matt Nadareski
+ * Copyright (C) 2011-2019 Daniel Scharrer
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the author(s) be held liable for any damages
@@ -19,8 +18,8 @@
  * 3. This notice may not be removed or altered from any source distribution.
  */
 
+using InnoExtractSharp.Util;
 using System.IO;
-using System.Text;
 
 namespace InnoExtractSharp.Setup
 {
@@ -44,16 +43,13 @@ namespace InnoExtractSharp.Setup
 
             public void Load(Stream input, InnoVersion version)
             {
-                using (BinaryReader br = new BinaryReader(input, Encoding.Default, true))
-                {
-                    if (version >= InnoVersion.INNO_VERSION(1, 3, 21))
-                        Build = br.ReadUInt16();
-                    else
-                        Build = 0;
+                if (version >= InnoVersion.INNO_VERSION(1, 3, 21))
+                    Build = Endianness<ushort>.LoadLittleEndian(input);
+                else
+                    Build = 0;
 
-                    Minor = br.ReadByte();
-                    Major = br.ReadByte();
-                }
+                Minor = Endianness<byte>.LoadLittleEndian(input);
+                Major = Endianness<byte>.LoadLittleEndian(input);
             }
         }
 
@@ -78,23 +74,27 @@ namespace InnoExtractSharp.Setup
 
         public ServicePack NtServicePack = new ServicePack();
 
+        public readonly static WindowsVersion None = new WindowsVersion
+        {
+            WinVersion = new Data { Major = 0, Minor = 0, Build = 0 },
+            NtVersion = new Data { Major = 0, Minor = 0, Build = 0 },
+            NtServicePack = new ServicePack { Major = 0, Minor = 0 },
+        };
+
         public void Load(Stream input, InnoVersion version)
         {
-            using (BinaryReader br = new BinaryReader(input, Encoding.Default, true))
-            {
-                WinVersion.Load(input, version);
-                NtVersion.Load(input, version);
+            WinVersion.Load(input, version);
+            NtVersion.Load(input, version);
 
-                if (version >= InnoVersion.INNO_VERSION(1, 3, 21))
-                {
-                    NtServicePack.Minor = br.ReadByte();
-                    NtServicePack.Major = br.ReadByte();
-                }
-                else
-                {
-                    NtServicePack.Minor = 0;
-                    NtServicePack.Major = 0;
-                }
+            if (version >= InnoVersion.INNO_VERSION(1, 3, 21))
+            {
+                NtServicePack.Minor = Endianness<byte>.LoadLittleEndian(input);
+                NtServicePack.Major = Endianness<byte>.LoadLittleEndian(input);
+            }
+            else
+            {
+                NtServicePack.Minor = 0;
+                NtServicePack.Major = 0;
             }
         }
 
@@ -108,75 +108,6 @@ namespace InnoExtractSharp.Setup
         public static bool operator !=(WindowsVersion wv1, WindowsVersion wv2)
         {
             return !(wv1 == wv2);
-        }
-
-        public static WindowsVersion None = new WindowsVersion
-        {
-            WinVersion = new Data { Major = 0, Minor = 0, Build = 0 },
-            NtVersion = new Data { Major = 0, Minor = 0, Build = 0 },
-            NtServicePack = new ServicePack { Major = 0, Minor = 0 },
-        };
-    }
-
-    public class WindowsVersionRange
-    {
-        public WindowsVersion Begin = new WindowsVersion();
-        public WindowsVersion End = new WindowsVersion();
-
-        public void Load(Stream input, InnoVersion version)
-        {
-            Begin.Load(input, version);
-            End.Load(input, version);
-        }
-    }
-
-    public class WindowsVersionName
-    {
-        public string Name;
-        public WindowsVersion.Data Version;
-
-        public static WindowsVersionName[] Names =
-        {
-            new WindowsVersionName { Name = "Windows 1.0", Version = new WindowsVersion.Data { Major = 1, Minor = 4, Build = 0 }},
-            new WindowsVersionName { Name = "Windows 2.0", Version = new WindowsVersion.Data { Major = 2, Minor = 11, Build = 0 }},
-            new WindowsVersionName { Name = "Windows 3.0", Version = new WindowsVersion.Data { Major = 3, Minor = 0, Build = 0 }},
-            new WindowsVersionName { Name = "Windows for Workgroups 3.11", Version = new WindowsVersion.Data { Major = 3, Minor = 11, Build = 0 }},
-            new WindowsVersionName { Name = "Windows 95", Version = new WindowsVersion.Data { Major = 4, Minor = 0, Build = 950 }},
-            new WindowsVersionName { Name = "Windows 98", Version = new WindowsVersion.Data { Major = 4, Minor = 1, Build = 1998 }},
-            new WindowsVersionName { Name = "Windows 98 Second Edition", Version = new WindowsVersion.Data { Major = 4, Minor = 1, Build = 2222 }},
-            new WindowsVersionName { Name = "Windows ME", Version = new WindowsVersion.Data { Major = 4, Minor = 90, Build = 3000 }},
-        };
-        public static WindowsVersionName[] NtNames =
-        {
-            new WindowsVersionName { Name = "Windows NT Workstation 3.5", Version = new WindowsVersion.Data { Major = 3, Minor = 5, Build = 807 }},
-            new WindowsVersionName { Name = "Windows NT 3.1", Version = new WindowsVersion.Data { Major = 3, Minor = 10, Build = 528 }},
-            new WindowsVersionName { Name = "Windows NT Workstation 3.51", Version = new WindowsVersion.Data { Major = 3, Minor = 51, Build = 1057 }},
-            new WindowsVersionName { Name = "Windows NT Workstation 4.0", Version = new WindowsVersion.Data { Major = 4, Minor = 0, Build = 1381 }},
-            new WindowsVersionName { Name = "Windows 2000", Version = new WindowsVersion.Data { Major = 5, Minor = 0, Build = 2195 }},
-            new WindowsVersionName { Name = "Windows XP", Version = new WindowsVersion.Data { Major = 5, Minor = 1, Build = 2600 }},
-            new WindowsVersionName { Name = "Windows XP x64", Version = new WindowsVersion.Data { Major = 5, Minor = 2, Build = 3790 }},
-            new WindowsVersionName { Name = "Windows Vista", Version = new WindowsVersion.Data { Major = 6, Minor = 0, Build = 6000 }},
-            new WindowsVersionName { Name = "Windows 7", Version = new WindowsVersion.Data { Major = 6, Minor = 1, Build = 7600 }},
-            new WindowsVersionName { Name = "Windows 8", Version = new WindowsVersion.Data { Major = 6, Minor = 2, Build = 0 }},
-            new WindowsVersionName { Name = "Windows 8.1", Version = new WindowsVersion.Data { Major = 6, Minor = 3, Build = 0 }},
-            new WindowsVersionName { Name = "Windows 10", Version = new WindowsVersion.Data { Major = 10, Minor = 0, Build = 0 }},
-        };
-
-        public static string GetVersionName(WindowsVersion.Data version, bool nt = false)
-        {
-            WindowsVersionName[] names;
-            if (nt)
-                names = NtNames;
-            else
-                names = Names;
-
-            foreach (var name in names)
-            {
-                if (name.Version.Major == version.Major && name.Version.Minor == version.Minor)
-                    return name.Name;
-            }
-
-            return null;
         }
     }
 }

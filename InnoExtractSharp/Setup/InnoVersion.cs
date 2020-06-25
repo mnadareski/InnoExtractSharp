@@ -1,6 +1,5 @@
 ﻿/*
- * Copyright (C) 2011-2014 Daniel Scharrer
- * Converted code Copyright (C) 2018 Matt Nadareski
+ * Copyright (C) 2011-2020 Daniel Scharrer
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the author(s) be held liable for any damages
@@ -19,6 +18,7 @@
  * 3. This notice may not be removed or altered from any source distribution.
  */
 
+using InnoExtractSharp.Util;
 using System;
 using System.IO;
 using System.Linq;
@@ -26,161 +26,160 @@ using System.Text;
 
 namespace InnoExtractSharp.Setup
 {
-    public class KnownLegacyVersion
-    {
-        public char[] Name = new char[13]; // terminating 0 byte is ignored
-
-        public uint Version;
-
-        public byte Bits;
-
-        public KnownLegacyVersion(string name, uint version, byte bits)
-        {
-            Name = name.ToCharArray();
-            Version = version;
-            Bits = bits;
-        }
-
-        public static implicit operator uint(KnownLegacyVersion version)
-        {
-            return version.Version;
-        }
-    }
-
-    public class KnownVersion
-    {
-        public char[] Name = new char[64];
-
-        public uint Version;
-        public bool Unicode;
-
-        public KnownVersion(string name, uint version, bool unicode)
-        {
-            Name = name.ToCharArray();
-            Version = version;
-            Unicode = unicode;
-        }
-
-        public static implicit operator uint(KnownVersion version)
-        {
-            return version.Version;
-        }
-    }
 
     public class InnoVersion
     {
+        [Flags]
+        public enum Flags
+        {
+            Bits16,
+            Unicode,
+            ISX,
+        }
+
         public uint Value;
 
-        public byte Bits; // 16 or 32
-
-        public bool Unicode;
+        public Flags Variant;
 
         public bool Known;
 
         public static KnownLegacyVersion[] LegacyVersions = new KnownLegacyVersion[]
         {
-            new KnownLegacyVersion("i1.2.10--16\x1a", INNO_VERSION(1, 2, 10), 16),
-            new KnownLegacyVersion("i1.2.10--32\x1a", INNO_VERSION(1, 2, 10), 32),
+            new KnownLegacyVersion("i1.2.10--16\x1a", INNO_VERSION(1, 2, 10), Flags.Bits16),
+            new KnownLegacyVersion("i1.2.10--32\x1a", INNO_VERSION(1, 2, 10), (Flags)0),
         };
 
         public static KnownVersion[] Versions = new KnownVersion[]
         {
-            new KnownVersion("Inno Setup Setup Data (1.3.21)",     INNO_VERSION_EXT(1, 3, 21, 0), false),
-            new KnownVersion("Inno Setup Setup Data (1.3.25)",     INNO_VERSION_EXT(1, 3, 25, 0), false),
-            new KnownVersion("Inno Setup Setup Data (2.0.0)",      INNO_VERSION_EXT(2, 0,  0, 0), false),
-            new KnownVersion("Inno Setup Setup Data (2.0.1)",      INNO_VERSION_EXT(2, 0,  1, 0), false),
-            new KnownVersion("Inno Setup Setup Data (2.0.2)",      INNO_VERSION_EXT(2, 0,  2, 0), false), // !
-	        new KnownVersion("Inno Setup Setup Data (2.0.5)",      INNO_VERSION_EXT(2, 0,  5, 0), false),
-            new KnownVersion("Inno Setup Setup Data (2.0.6a)",     INNO_VERSION_EXT(2, 0,  6, 0), false),
-            new KnownVersion("Inno Setup Setup Data (2.0.7)",      INNO_VERSION_EXT(2, 0,  7, 0), false),
-            new KnownVersion("Inno Setup Setup Data (2.0.8)",      INNO_VERSION_EXT(2, 0,  8, 0), false),
-            new KnownVersion("Inno Setup Setup Data (2.0.11)",     INNO_VERSION_EXT(2, 0, 11, 0), false),
-            new KnownVersion("Inno Setup Setup Data (2.0.17)",     INNO_VERSION_EXT(2, 0, 17, 0), false),
-            new KnownVersion("Inno Setup Setup Data (2.0.18)",     INNO_VERSION_EXT(2, 0, 18, 0), false),
-            new KnownVersion("Inno Setup Setup Data (3.0.0a)",     INNO_VERSION_EXT(3, 0,  0, 0), false),
-            new KnownVersion("Inno Setup Setup Data (3.0.1)",      INNO_VERSION_EXT(3, 0,  1, 0), false),
-            new KnownVersion("Inno Setup Setup Data (3.0.3)",      INNO_VERSION_EXT(3, 0,  3, 0), false),
-            new KnownVersion("Inno Setup Setup Data (3.0.4)",      INNO_VERSION_EXT(3, 0,  4, 0), false), // !
-	        new KnownVersion("Inno Setup Setup Data (3.0.5)",      INNO_VERSION_EXT(3, 0,  5, 0), false),
-            new KnownVersion("My Inno Setup Extensions Setup Data (3.0.6.1)", INNO_VERSION_EXT(3, 0,  6, 1), false),
-            new KnownVersion("Inno Setup Setup Data (4.0.0a)",     INNO_VERSION_EXT(4, 0,  0, 0), false),
-            new KnownVersion("Inno Setup Setup Data (4.0.1)",      INNO_VERSION_EXT(4, 0,  1, 0), false),
-            new KnownVersion("Inno Setup Setup Data (4.0.3)",      INNO_VERSION_EXT(4, 0,  3, 0), false),
-            new KnownVersion("Inno Setup Setup Data (4.0.5)",      INNO_VERSION_EXT(4, 0,  5, 0), false),
-            new KnownVersion("Inno Setup Setup Data (4.0.9)",      INNO_VERSION_EXT(4, 0,  9, 0), false),
-            new KnownVersion("Inno Setup Setup Data (4.0.10)",     INNO_VERSION_EXT(4, 0, 10, 0), false),
-            new KnownVersion("Inno Setup Setup Data (4.0.11)",     INNO_VERSION_EXT(4, 0, 11, 0), false),
-            new KnownVersion("Inno Setup Setup Data (4.1.0)",      INNO_VERSION_EXT(4, 1,  0, 0), false),
-            new KnownVersion("Inno Setup Setup Data (4.1.2)",      INNO_VERSION_EXT(4, 1,  2, 0), false),
-            new KnownVersion("Inno Setup Setup Data (4.1.3)",      INNO_VERSION_EXT(4, 1,  3, 0), false),
-            new KnownVersion("Inno Setup Setup Data (4.1.4)",      INNO_VERSION_EXT(4, 1,  4, 0), false),
-            new KnownVersion("Inno Setup Setup Data (4.1.5)",      INNO_VERSION_EXT(4, 1,  5, 0), false),
-            new KnownVersion("Inno Setup Setup Data (4.1.6)",      INNO_VERSION_EXT(4, 1,  6, 0), false),
-            new KnownVersion("Inno Setup Setup Data (4.1.8)",      INNO_VERSION_EXT(4, 1,  8, 0), false),
-            new KnownVersion("Inno Setup Setup Data (4.2.0)",      INNO_VERSION_EXT(4, 2,  0, 0), false),
-            new KnownVersion("Inno Setup Setup Data (4.2.1)",      INNO_VERSION_EXT(4, 2,  1, 0), false),
-            new KnownVersion("Inno Setup Setup Data (4.2.2)",      INNO_VERSION_EXT(4, 2,  2, 0), false),
-            new KnownVersion("Inno Setup Setup Data (4.2.3)",      INNO_VERSION_EXT(4, 2,  3, 0), false),
-            new KnownVersion("Inno Setup Setup Data (4.2.4)",      INNO_VERSION_EXT(4, 2,  4, 0), false), // !
-	        new KnownVersion("Inno Setup Setup Data (4.2.5)",      INNO_VERSION_EXT(4, 2,  5, 0), false),
-            new KnownVersion("Inno Setup Setup Data (4.2.6)",      INNO_VERSION_EXT(4, 2,  6, 0), false),
-            new KnownVersion("Inno Setup Setup Data (5.0.0)",      INNO_VERSION_EXT(5, 0,  0, 0), false),
-            new KnownVersion("Inno Setup Setup Data (5.0.1)",      INNO_VERSION_EXT(5, 0,  1, 0), false),
-            new KnownVersion("Inno Setup Setup Data (5.0.3)",      INNO_VERSION_EXT(5, 0,  3, 0), false),
-            new KnownVersion("Inno Setup Setup Data (5.0.4)",      INNO_VERSION_EXT(5, 0,  4, 0), false),
-            new KnownVersion("Inno Setup Setup Data (5.1.0)",      INNO_VERSION_EXT(5, 1,  0, 0), false),
-            new KnownVersion("Inno Setup Setup Data (5.1.2)",      INNO_VERSION_EXT(5, 1,  2, 0), false),
-            new KnownVersion("Inno Setup Setup Data (5.1.7)",      INNO_VERSION_EXT(5, 1,  7, 0), false),
-            new KnownVersion("Inno Setup Setup Data (5.1.10)",     INNO_VERSION_EXT(5, 1, 10, 0), false),
-            new KnownVersion("Inno Setup Setup Data (5.1.13)",     INNO_VERSION_EXT(5, 1, 13, 0), false),
-            new KnownVersion("Inno Setup Setup Data (5.2.0)",      INNO_VERSION_EXT(5, 2,  0, 0), false),
-            new KnownVersion("Inno Setup Setup Data (5.2.1)",      INNO_VERSION_EXT(5, 2,  1, 0), false),
-            new KnownVersion("Inno Setup Setup Data (5.2.3)",      INNO_VERSION_EXT(5, 2,  3, 0), false),
-            new KnownVersion("Inno Setup Setup Data (5.2.5)",      INNO_VERSION_EXT(5, 2,  5, 0), false),
-            new KnownVersion("Inno Setup Setup Data (5.2.5) (u)",  INNO_VERSION_EXT(5, 2,  5, 0), true ),
-            new KnownVersion("Inno Setup Setup Data (5.3.0)",      INNO_VERSION_EXT(5, 3,  0, 0), false),
-            new KnownVersion("Inno Setup Setup Data (5.3.0) (u)",  INNO_VERSION_EXT(5, 3,  0, 0), true ),
-            new KnownVersion("Inno Setup Setup Data (5.3.3)",      INNO_VERSION_EXT(5, 3,  3, 0), false),
-            new KnownVersion("Inno Setup Setup Data (5.3.3) (u)",  INNO_VERSION_EXT(5, 3,  3, 0), true ),
-            new KnownVersion("Inno Setup Setup Data (5.3.5)",      INNO_VERSION_EXT(5, 3,  5, 0), false),
-            new KnownVersion("Inno Setup Setup Data (5.3.5) (u)",  INNO_VERSION_EXT(5, 3,  5, 0), true ),
-            new KnownVersion("Inno Setup Setup Data (5.3.6)",      INNO_VERSION_EXT(5, 3,  6, 0), false),
-            new KnownVersion("Inno Setup Setup Data (5.3.6) (u)",  INNO_VERSION_EXT(5, 3,  6, 0), true ),
-            new KnownVersion("Inno Setup Setup Data (5.3.7)",      INNO_VERSION_EXT(5, 3,  7, 0), false),
-            new KnownVersion("Inno Setup Setup Data (5.3.7) (u)",  INNO_VERSION_EXT(5, 3,  7, 0), true ),
-            new KnownVersion("Inno Setup Setup Data (5.3.8)",      INNO_VERSION_EXT(5, 3,  8, 0), false),
-            new KnownVersion("Inno Setup Setup Data (5.3.8) (u)",  INNO_VERSION_EXT(5, 3,  8, 0), true ),
-            new KnownVersion("Inno Setup Setup Data (5.3.9)",      INNO_VERSION_EXT(5, 3,  9, 0), false),
-            new KnownVersion("Inno Setup Setup Data (5.3.9) (u)",  INNO_VERSION_EXT(5, 3,  9, 0), true ),
-            new KnownVersion("Inno Setup Setup Data (5.3.10)",     INNO_VERSION_EXT(5, 3, 10, 0), false),
-            new KnownVersion("Inno Setup Setup Data (5.3.10) (u)", INNO_VERSION_EXT(5, 3, 10, 0), true ),
-            new KnownVersion("Inno Setup Setup Data (5.4.2)",      INNO_VERSION_EXT(5, 4,  2, 0), false),
-            new KnownVersion("Inno Setup Setup Data (5.4.2) (u)",  INNO_VERSION_EXT(5, 4,  2, 0), true ),
-            new KnownVersion("Inno Setup Setup Data (5.5.0)",      INNO_VERSION_EXT(5, 5,  0, 0), false),
-            new KnownVersion("Inno Setup Setup Data (5.5.0) (u)",  INNO_VERSION_EXT(5, 5,  0, 0), true ),
-            new KnownVersion("!!! BlackBox v2?, marked as 5.5.0",  INNO_VERSION_EXT(5, 5,  0, 1), true ),
-            new KnownVersion("Inno Setup Setup Data (5.5.6)",      INNO_VERSION_EXT(5, 5,  6, 0), false),
-            new KnownVersion("Inno Setup Setup Data (5.5.6) (u)",  INNO_VERSION_EXT(5, 5,  6, 0), true ),
-            new KnownVersion("Inno Setup Setup Data (5.5.7)",      INNO_VERSION_EXT(5, 5,  7, 0), false),
-            new KnownVersion("Inno Setup Setup Data (5.5.7) (u)",  INNO_VERSION_EXT(5, 5,  7, 0), true ),
-            new KnownVersion("Inno Setup Setup Data (5.6.0)",      INNO_VERSION_EXT(5, 6,  0, 0), false),
-            new KnownVersion("Inno Setup Setup Data (5.6.0) (u)",  INNO_VERSION_EXT(5, 6,  0, 0), true ),
+            new KnownVersion("Inno Setup Setup Data (1.3.3)",                      INNO_VERSION_EXT(1, 3,  3, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (1.3.9)",                      INNO_VERSION_EXT(1, 3,  9, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (1.3.10)",                     INNO_VERSION_EXT(1, 3, 10, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (1.3.10) with ISX (1.3.10)",   INNO_VERSION_EXT(1, 3, 10, 0), Flags.ISX),
+            new KnownVersion("Inno Setup Setup Data (1.3.12) with ISX (1.3.12.1)", INNO_VERSION_EXT(1, 3, 12, 1), Flags.ISX),
+            new KnownVersion("Inno Setup Setup Data (1.3.21)",     /* ambiguous */ INNO_VERSION_EXT(1, 3, 21, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (1.3.21) with ISX (1.3.17)",   INNO_VERSION_EXT(1, 3, 21, 0), Flags.ISX),
+            new KnownVersion("Inno Setup Setup Data (1.3.24)",                     INNO_VERSION_EXT(1, 3, 24, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (1.3.21) with ISX (1.3.24)",   INNO_VERSION_EXT(1, 3, 24, 0), Flags.ISX),
+            new KnownVersion("Inno Setup Setup Data (1.3.25)",                     INNO_VERSION_EXT(1, 3, 25, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (1.3.25) with ISX (1.3.25)",   INNO_VERSION_EXT(1, 3, 25, 0), Flags.ISX),
+            new KnownVersion("Inno Setup Setup Data (2.0.0)",                      INNO_VERSION_EXT(2, 0,  0, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (2.0.1)",      /* ambiguous */ INNO_VERSION_EXT(2, 0,  1, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (2.0.2)",                      INNO_VERSION_EXT(2, 0,  2, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (2.0.5)",                      INNO_VERSION_EXT(2, 0,  5, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (2.0.6a)",                     INNO_VERSION_EXT(2, 0,  6, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (2.0.6a) with ISX (2.0.3)",    INNO_VERSION_EXT(2, 0,  6, 0), Flags.ISX),
+            new KnownVersion("Inno Setup Setup Data (2.0.7)",                      INNO_VERSION_EXT(2, 0,  7, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (2.0.8)",                      INNO_VERSION_EXT(2, 0,  8, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (2.0.8) with ISX (2.0.3)",     INNO_VERSION_EXT(2, 0,  8, 0), Flags.ISX),
+            new KnownVersion("Inno Setup Setup Data (2.0.8) with ISX (2.0.10)",    INNO_VERSION_EXT(2, 0, 10, 0), Flags.ISX),
+            new KnownVersion("Inno Setup Setup Data (2.0.11)",                     INNO_VERSION_EXT(2, 0, 11, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (2.0.11) with ISX (2.0.11)",   INNO_VERSION_EXT(2, 0, 11, 0), Flags.ISX),
+            new KnownVersion("Inno Setup Setup Data (2.0.17)",                     INNO_VERSION_EXT(2, 0, 17, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (2.0.17) with ISX (2.0.11)",   INNO_VERSION_EXT(2, 0, 17, 0), Flags.ISX),
+            new KnownVersion("Inno Setup Setup Data (2.0.18)",                     INNO_VERSION_EXT(2, 0, 18, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (2.0.18) with ISX (2.0.11)",   INNO_VERSION_EXT(2, 0, 18, 0), Flags.ISX),
+            new KnownVersion("Inno Setup Setup Data (3.0.0a)",                     INNO_VERSION_EXT(3, 0,  0, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (3.0.1)",                      INNO_VERSION_EXT(3, 0,  1, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (3.0.1) with ISX (3.0.0)",     INNO_VERSION_EXT(3, 0,  1, 0), Flags.ISX),
+            new KnownVersion("Inno Setup Setup Data (3.0.3)",      /* ambiguous */ INNO_VERSION_EXT(3, 0,  3, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (3.0.3) with ISX (3.0.3)",     INNO_VERSION_EXT(3, 0,  3, 0), Flags.ISX),
+            new KnownVersion("Inno Setup Setup Data (3.0.4)",                      INNO_VERSION_EXT(3, 0,  4, 0), (Flags)0),
+            new KnownVersion("My Inno Setup Extensions Setup Data (3.0.4)",        INNO_VERSION_EXT(3, 0,  4, 0), Flags.ISX),
+            new KnownVersion("Inno Setup Setup Data (3.0.5)",                      INNO_VERSION_EXT(3, 0,  5, 0), (Flags)0),
+            new KnownVersion("My Inno Setup Extensions Setup Data (3.0.6.1)",      INNO_VERSION_EXT(3, 0,  6, 1), Flags.ISX),
+            new KnownVersion("Inno Setup Setup Data (4.0.0a)",                     INNO_VERSION_EXT(4, 0,  0, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (4.0.1)",                      INNO_VERSION_EXT(4, 0,  1, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (4.0.3)",                      INNO_VERSION_EXT(4, 0,  3, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (4.0.5)",                      INNO_VERSION_EXT(4, 0,  5, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (4.0.9)",                      INNO_VERSION_EXT(4, 0,  9, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (4.0.10)",                     INNO_VERSION_EXT(4, 0, 10, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (4.0.11)",                     INNO_VERSION_EXT(4, 0, 11, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (4.1.0)",                      INNO_VERSION_EXT(4, 1,  0, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (4.1.2)",                      INNO_VERSION_EXT(4, 1,  2, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (4.1.3)",                      INNO_VERSION_EXT(4, 1,  3, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (4.1.4)",                      INNO_VERSION_EXT(4, 1,  4, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (4.1.5)",                      INNO_VERSION_EXT(4, 1,  5, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (4.1.6)",                      INNO_VERSION_EXT(4, 1,  6, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (4.1.8)",                      INNO_VERSION_EXT(4, 1,  8, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (4.2.0)",                      INNO_VERSION_EXT(4, 2,  0, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (4.2.1)",                      INNO_VERSION_EXT(4, 2,  1, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (4.2.2)",                      INNO_VERSION_EXT(4, 2,  2, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (4.2.3)",      /* ambiguous */ INNO_VERSION_EXT(4, 2,  3, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (4.2.4)",                      INNO_VERSION_EXT(4, 2,  4, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (4.2.5)",                      INNO_VERSION_EXT(4, 2,  5, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (4.2.6)",                      INNO_VERSION_EXT(4, 2,  6, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (5.0.0)",                      INNO_VERSION_EXT(5, 0,  0, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (5.0.1)",                      INNO_VERSION_EXT(5, 0,  1, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (5.0.3)",                      INNO_VERSION_EXT(5, 0,  3, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (5.0.4)",                      INNO_VERSION_EXT(5, 0,  4, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (5.1.0)",                      INNO_VERSION_EXT(5, 1,  0, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (5.1.2)",                      INNO_VERSION_EXT(5, 1,  2, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (5.1.7)",                      INNO_VERSION_EXT(5, 1,  7, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (5.1.10)",                     INNO_VERSION_EXT(5, 1, 10, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (5.1.13)",                     INNO_VERSION_EXT(5, 1, 13, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (5.2.0)",                      INNO_VERSION_EXT(5, 2,  0, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (5.2.1)",                      INNO_VERSION_EXT(5, 2,  1, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (5.2.3)",                      INNO_VERSION_EXT(5, 2,  3, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (5.2.5)",                      INNO_VERSION_EXT(5, 2,  5, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (5.2.5) (u)",                  INNO_VERSION_EXT(5, 2,  5, 0), Flags.Unicode),
+            new KnownVersion("Inno Setup Setup Data (5.3.0)",                      INNO_VERSION_EXT(5, 3,  0, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (5.3.0) (u)",                  INNO_VERSION_EXT(5, 3,  0, 0), Flags.Unicode),
+            new KnownVersion("Inno Setup Setup Data (5.3.3)",                      INNO_VERSION_EXT(5, 3,  3, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (5.3.3) (u)",                  INNO_VERSION_EXT(5, 3,  3, 0), Flags.Unicode),
+            new KnownVersion("Inno Setup Setup Data (5.3.5)",                      INNO_VERSION_EXT(5, 3,  5, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (5.3.5) (u)",                  INNO_VERSION_EXT(5, 3,  5, 0), Flags.Unicode),
+            new KnownVersion("Inno Setup Setup Data (5.3.6)",                      INNO_VERSION_EXT(5, 3,  6, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (5.3.6) (u)",                  INNO_VERSION_EXT(5, 3,  6, 0), Flags.Unicode),
+            new KnownVersion("Inno Setup Setup Data (5.3.7)",                      INNO_VERSION_EXT(5, 3,  7, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (5.3.7) (u)",                  INNO_VERSION_EXT(5, 3,  7, 0), Flags.Unicode),
+            new KnownVersion("Inno Setup Setup Data (5.3.8)",                      INNO_VERSION_EXT(5, 3,  8, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (5.3.8) (u)",                  INNO_VERSION_EXT(5, 3,  8, 0), Flags.Unicode),
+            new KnownVersion("Inno Setup Setup Data (5.3.9)",                      INNO_VERSION_EXT(5, 3,  9, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (5.3.9) (u)",                  INNO_VERSION_EXT(5, 3,  9, 0), Flags.Unicode),
+            new KnownVersion("Inno Setup Setup Data (5.3.10)",                     INNO_VERSION_EXT(5, 3, 10, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (5.3.10) (u)",                 INNO_VERSION_EXT(5, 3, 10, 0), Flags.Unicode),
+            new KnownVersion("Inno Setup Setup Data (5.4.2)",                      INNO_VERSION_EXT(5, 4,  2, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (5.4.2) (u)",  /* ambiguous */ INNO_VERSION_EXT(5, 4,  2, 0), Flags.Unicode),
+            new KnownVersion("" /* BlackBox v1? */,                                INNO_VERSION_EXT(5, 4,  2, 1), (Flags)0),
+            new KnownVersion("" /* BlackBox v1? */,                                INNO_VERSION_EXT(5, 4,  2, 1), Flags.Unicode),
+            new KnownVersion("Inno Setup Setup Data (5.5.0)",                      INNO_VERSION_EXT(5, 5,  0, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (5.5.0) (u)",  /* ambiguous */ INNO_VERSION_EXT(5, 5,  0, 0), Flags.Unicode),
+            new KnownVersion("" /* BlackBox v2 / Inno Setup Ultra */,              INNO_VERSION_EXT(5, 5,  0, 1), (Flags)0),
+            new KnownVersion("" /* BlackBox v2 / Inno Setup Ultra */,              INNO_VERSION_EXT(5, 5,  0, 1), Flags.Unicode),
+            new KnownVersion("Inno Setup Setup Data (5.5.6)",                      INNO_VERSION_EXT(5, 5,  6, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (5.5.6) (u)",                  INNO_VERSION_EXT(5, 5,  6, 0), Flags.Unicode),
+            new KnownVersion("Inno Setup Setup Data (5.5.7)",      /* ambiguous */ INNO_VERSION_EXT(5, 5,  7, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (5.5.7) (u)",  /* ambiguous */ INNO_VERSION_EXT(5, 5,  7, 0), Flags.Unicode),
+            new KnownVersion("Inno Setup Setup Data (5.5.7) (U)",  /* ambiguous */ INNO_VERSION_EXT(5, 5,  7, 0), Flags.Unicode),
+            new KnownVersion("Inno Setup Setup Data (5.5.8) (u)", /* unofficial */ INNO_VERSION_EXT(5, 5,  7, 0), Flags.Unicode),
+            new KnownVersion("" /* unknown 5.5.7 (u) variant */,   /* ambiguous */ INNO_VERSION_EXT(5, 5,  7, 1), (Flags)0),
+            new KnownVersion("" /* unknown 5.5.7 (u) variant */,   /* ambiguous */ INNO_VERSION_EXT(5, 5,  7, 1), Flags.Unicode),
+            new KnownVersion("Inno Setup Setup Data (5.6.0)",                      INNO_VERSION_EXT(5, 6,  0, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (5.6.0) (u)",                  INNO_VERSION_EXT(5, 6,  0, 0), Flags.Unicode),
+            new KnownVersion("Inno Setup Setup Data (5.6.2)",     /* prerelease */ INNO_VERSION_EXT(5, 6,  2, 0), (Flags)0),
+            new KnownVersion("Inno Setup Setup Data (5.6.2) (u)", /* prerelease */ INNO_VERSION_EXT(5, 6,  2, 0), Flags.Unicode),
+            new KnownVersion("Inno Setup Setup Data (6.0.0) (u)",                  INNO_VERSION_EXT(6, 0,  0, 0), Flags.Unicode),
         };
 
         public InnoVersion()
         {
             Value = 0;
-            Bits = 0;
-            Unicode = false;
+            Variant = 0;
             Known = false;
         }
 
-        public InnoVersion(uint value, bool unicode = false, bool known = false, byte bits = 32)
+        public InnoVersion(uint v, Flags type = 0, bool isKnown = false)
         {
-            Value = value;
-            Bits = bits;
-            Unicode = unicode;
-            Known = known;
+            Value = v;
+            Variant = type;
+            Known = isKnown;
+        }
+
+        public InnoVersion(byte a, byte b, byte c, byte d = 0, Flags type = 0, bool isKnown = false)
+        {
+            Value = INNO_VERSION_EXT(a, b, c, d);
+            Variant = type;
+            Known = isKnown;
         }
 
         public uint A() { return Value >> 24; }
@@ -192,7 +191,7 @@ namespace InnoExtractSharp.Setup
         {
             char[] digits = "0123456789".ToCharArray();
 
-            using (BinaryReader br = new BinaryReader(input, Encoding.GetEncoding((int)Codepage()), true))
+            using (BinaryReader br = new BinaryReader(input, Encoding.Default, true))
             {
                 char[] legacyVersion = new char[12];
                 legacyVersion = br.ReadChars(legacyVersion.Length);
@@ -204,22 +203,24 @@ namespace InnoExtractSharp.Setup
                         if (legacyVersion.SequenceEqual(LegacyVersions[i].Name))
                         {
                             Value = LegacyVersions[i].Version;
-                            Bits = LegacyVersions[i].Bits;
-                            Unicode = false;
+                            Variant = LegacyVersions[i].Variant;
                             Known = true;
+                            Console.WriteLine($"known legacy version: \"{Versions[i].Name}\"");
                             return;
                         }
                     }
 
+                    Console.WriteLine($"unknown legacy version: {new string(legacyVersion)}");
+
                     if (legacyVersion[0] != 'i' || legacyVersion[2] != '.' || legacyVersion[4] != '.' || legacyVersion[7] != '-' || legacyVersion[8] != '-')
-                        throw new Exception(); //TODO: We really shouldn't do this
+                        throw new VersionError();
 
                     if (legacyVersion[9] == '1' && legacyVersion[10] == '6')
-                        Bits = 16;
+                        Variant = Flags.Bits16;
                     else if (legacyVersion[9] == '3' && legacyVersion[10] == '2')
-                        Bits = 32;
+                        Variant = 0;
                     else
-                        throw new Exception(); //TODO: We really shouldn't do this
+                        throw new VersionError();
 
                     string versionStrLegacy = new string(legacyVersion);
 
@@ -232,10 +233,9 @@ namespace InnoExtractSharp.Setup
                     }
                     catch
                     {
-                        throw new Exception(); //TODO: We really shouldn't do this
+                        throw new VersionError();
                     }
 
-                    Unicode = false;
                     Known = false;
 
                     return;
@@ -251,20 +251,22 @@ namespace InnoExtractSharp.Setup
                     if (version.SequenceEqual(Versions[i].Name))
                     {
                         Value = Versions[i].Version;
-                        Bits = 32;
-                        Unicode = Versions[i].Unicode;
+                        Variant = Versions[i].Variant;
                         Known = true;
+                        Console.WriteLine($"known version: \"{Versions[i].Name}\"");
                         return;
                     }
                 }
 
                 int end = Array.IndexOf(version, '\0');
                 string versionStr = new string(version.Take(end).ToArray());
+                Console.WriteLine($"unknown version: {versionStr}");
                 if (!versionStr.Contains("Inno Setup"))
-                    throw new Exception(); //TODO: We really shouldn't do this
+                    throw new VersionError();
 
+                Value = 0;
                 int bracket = versionStr.IndexOf('(');
-                for(; bracket != -1; bracket = versionStr.IndexOf('(', bracket + 1))
+                for (; bracket != -1; bracket = versionStr.IndexOf('(', bracket + 1))
                 {
                     if (versionStr.Length - bracket < 6)
                         continue;
@@ -275,48 +277,43 @@ namespace InnoExtractSharp.Setup
                         int a_end = FindFirstNotOf(versionStr, digits, a_start);
                         if (a_end == -1 || versionStr[a_end] != '.')
                             continue;
-                        int a = 0;
-                        for(int i = a_start; i < a_end; i++)
-                            a = (a * 10) + Array.IndexOf(digits, versionStr[i]);
+
+                        uint a = (uint)Utility.ToUnsigned(versionStr.Substring(a_start), a_end - a_start);
 
                         int b_start = a_end + 1;
                         int b_end = FindFirstNotOf(versionStr, digits, b_start);
                         if (b_end == -1 || versionStr[b_end] != '.')
                             continue;
-                        int b = 0;
-                        for (int i = b_start; i < b_end; i++)
-                            b = (b * 10) + Array.IndexOf(digits, versionStr[i]);
+
+                        uint b = (uint)Utility.ToUnsigned(versionStr.Substring(b_start), b_end - b_start);
 
                         int c_start = b_end + 1;
                         int c_end = FindFirstNotOf(versionStr, digits, c_start);
-                        if (c_end == -1)
+                        if (c_end == -1 || versionStr[c_end] != '.')
                             continue;
-                        int c = 0;
-                        for (int i = c_start; i < c_end; i++)
-                            c = (c * 10) + Array.IndexOf(digits, versionStr[i]);
+
+                        uint c = (uint)Utility.ToUnsigned(versionStr.Substring(c_start), c_end - c_start);
 
                         int d_start = c_end;
                         if (versionStr[d_start] == 'a')
                         {
-                            if (d_start + 1 > versionStr.Length)
+                            if (d_start + 1 >= versionStr.Length)
                                 continue;
 
                             d_start++;
                         }
-                        int d = 0;
+
+                        uint d = 0;
                         if (versionStr[d_start] == '.')
                         {
                             d_start++;
                             int d_end = FindFirstNotOf(versionStr, digits, d_start);
                             if (d_end != -1 && d_end != d_start)
-                            {
-                                for (int i = d_start; i < d_end; i++)
-                                    d = (d * 10) + Array.IndexOf(digits, versionStr[i]);
-                            }
+
+                                d = (uint)Utility.ToUnsigned(versionStr.Substring(c_start), c_end - c_start);
                         }
 
-                        Value = INNO_VERSION_EXT(a, b, c, d);
-                        break;
+                        Value = Math.Max(Value, INNO_VERSION_EXT(a, b, c, d));
                     }
                     catch
                     {
@@ -324,23 +321,24 @@ namespace InnoExtractSharp.Setup
                     }
                 }
 
-                if (bracket == -1)
-                    throw new Exception(); //TODO: We really shouldn't do this
+                if (Value == 0)
+                    throw new VersionError(); //TODO: We really shouldn't do this
 
-                Bits = 32;
-                Unicode = (versionStr.Contains("(u)"));
+                Variant = 0;
+                if (versionStr.Contains("(u)") || versionStr.Contains("(U)"))
+                    Variant |= Flags.Unicode;
+                if (versionStr.Contains("My Inno Setup Extensions") || versionStr.Contains("with ISX"))
+                    Variant |= Flags.ISX;
+
                 Known = false;
             }
         }
 
-        /// <summary>
-        /// The Windows codepage used to encode strings
-        /// </summary>
-        public uint Codepage()
-        {
-            return (uint)(Unicode ? 1200 : 1252);
-        }
+        public ushort Bits() { return (Variant & Flags.Bits16) != 0 ? (ushort)16 : (ushort)32; }
+        public bool IsUnicode() { return (Variant & Flags.Unicode) != 0; }
+        public bool IsIsx() { return (Variant & Flags.ISX) != 0; }
 
+        /// <returns>true if the version stored might not be correct</returns>
         public bool IsAmbiguous()
         {
             if (Value == INNO_VERSION(2, 0, 1))
@@ -402,9 +400,17 @@ namespace InnoExtractSharp.Setup
         {
             return INNO_VERSION_EXT(a, b, c, 0);
         }
+        public static uint INNO_VERSION(uint a, uint b, uint c)
+        {
+            return INNO_VERSION_EXT(a, b, c, 0);
+        }
         public static uint INNO_VERSION_EXT(int a, int b, int c, int d)
         {
             return (uint)((a << 24) | (b << 16) | (c << 8) | (d << 0));
+        }
+        public static uint INNO_VERSION_EXT(uint a, uint b, uint c, uint d)
+        {
+            return (a << 24) | (b << 16) | (c << 8) | (d << 0);
         }
 
         /// <summary>
