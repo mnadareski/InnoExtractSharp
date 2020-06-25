@@ -18,20 +18,20 @@
  * 3. This notice may not be removed or altered from any source distribution.
  */
 
-using SharpCompress.Compressors.LZMA;
 using System.IO;
+using SevenZip.Compression.LZMA;
 
 // LZMA 1 and 2 (aka xz) descompression filters to be used with boost::iostreams.
 namespace InnoExtractSharp.Streams
 {
-    public unsafe abstract class LzmaDecompressorImplBase
+    public abstract class LzmaDecompressorImplBase
     {
-        protected Stream Stream;
+        protected Decoder Decoder;
 
         // Abstract base class, subclasses need to intialize stream.
         protected LzmaDecompressorImplBase()
         {
-            Stream = null;
+            Decoder = null;
         }
 
         ~LzmaDecompressorImplBase()
@@ -39,41 +39,27 @@ namespace InnoExtractSharp.Streams
             Close();
         }
 
-        public virtual bool Filter(char* beginIn, char* endIn, char* beginOut, char* endOut, bool flush)
+        public virtual bool Filter(Stream src, byte[] dest, int offset, int n)
         {
-            LzmaStream strm = Stream as LzmaStream;
-
-            strm.NextIn = (byte*)beginIn;
-            strm.AvailIn = (int)(endIn - beginIn);
-
-            strm.NextOut = (byte*)beginOut;
-            strm.AvailOut = (int)(endOut - beginOut);
-
-            LzmaRet ret = LzmaCode(strm, LZMA_RUN);
-
-            if (flush && ret == LZMA_BUF_ERROR && strm.AvailOut > 0)
+            try
             {
-                throw new LzmaError("truncated lzma stream", (int)ret);
+                Stream destStream = new MemoryStream(dest, offset, n, true);
+                Decoder.Code(src, destStream, -1, -1, null);
+                return true;
             }
-
-            beginIn = (char*)strm.NextIn;
-            beginOut = (char*)strm.NextOut;
-
-            if (ret != LZMA_OK && ret != LZMA_STREAM_END && ret != LZMA_BUF_ERROR)
+            catch
             {
-                throw new LzmaError("lzma decrompression error", (int)ret);
+                return false;
             }
-
-            return (ret != LZMA_STREAM_END);
         }
 
         public virtual void Close()
         {
-            if (Stream != null)
+            if (Decoder != null)
             {
-                LzmaStream strm = Stream as LzmaStream;
+                LzmaStream strm = Decoder as LzmaStream;
                 LzmaEnd(strm);
-                strm.Dispose(); Stream.Dispose();
+                strm.Dispose(); Decoder.Dispose();
             }
         }
     }

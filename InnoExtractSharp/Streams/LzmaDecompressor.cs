@@ -20,7 +20,7 @@
  */
 
 using System.IO;
-using SharpCompress.Compressors.LZMA;
+using SevenZip.Compression.LZMA;
 
 // LZMA 1 and 2 (aka xz) descompression filters to be used with boost::iostreams.
 namespace InnoExtractSharp.Streams
@@ -41,33 +41,16 @@ namespace InnoExtractSharp.Streams
             BufferSize = bufferSize;
         }
 
-        public static LzmaStream InitRawLzmaStream(LzmaVli filter, LzmaOptionsLzma options)
+        public static Decoder InitRawLzmaStream(byte[] options)
         {
-            options.PresetDict = null;
-
-            LzmaStream strm = new LzmaStream();
-            LzmaStream tmp = LZMA_STREAM_INIT;
-            strm = tmp;
-            strm.Allocator = null;
-
-            LzmaFilter[] filters = new LzmaFilter[]
-            {
-                new LzmaFilter(filter, options),
-                new LzmaFilter(LZMA_VLI_UNKNOWN, null),
-            };
-            LzmaRet ret = LzmaRawDecoder(strm, filters);
-            if (ret != LZMA_OK)
-            {
-                strm = null;
-                throw new LzmaError("inno lzma init error", ret);
-            }
-
-            return strm;
+            Decoder decoder = new Decoder();
+            decoder.SetDecoderProperties(options);
+            return decoder;
         }
 
         public int Read(Stream src, byte[] dest, int offset, int n)
         {
-            throw new System.NotImplementedException();
+            return Decompressor.Filter(src, dest, offset, n);
         }
     }
 }

@@ -18,7 +18,8 @@
  * 3. This notice may not be removed or altered from any source distribution.
  */
 
-using SharpCompress.Compressors.LZMA;
+using System;
+using System.IO;
 
 // LZMA 1 and 2 (aka xz) descompression filters to be used with boost::iostreams.
 namespace InnoExtractSharp.Streams
@@ -30,31 +31,39 @@ namespace InnoExtractSharp.Streams
     /// Inno Setup uses raw LZMA2 streams.
     /// (preceded only by the dictionary size encoded as one byte)
     /// </summary>
-    public unsafe class InnoLzma2DecompressorImpl : LzmaDecompressorImplBase
+    public class InnoLzma2DecompressorImpl : LzmaDecompressorImplBase
     {
-        public override bool Filter(char* beginIn, char* endIn, char* beginOut, char* endOut, bool flush)
+        public override bool Filter(Stream src, byte[] dest, int offset, int n)
         {
 			// Decode the header.
-			if (Stream == null)
+			if (Decoder == null)
 			{
-				if (beginIn == endIn)
-					return true;
+                byte[] options = new byte[5];
+                src.Read(options, 0, 5);
+				if (options[0] > 40)
+					throw new LzmaError("inno lzma2 property error", 7 /* (int)LZMA_FORMAT_ERROR */);
 
-				LzmaOptionsLzma options = new LzmaOptionsLzma();
-
-				byte prop = (byte)*beginIn++;
-				if (prop > 40)
-					throw new LzmaError("inno lzma2 property error", (int)LZMA_FORMAT_ERROR);
-
-                if (prop == 40)
-                    options.DictSize = 0xffffffff;
+                if (options[0] == 40)
+                {
+                    options[1] = 0xff;
+                    options[2] = 0xff;
+                    options[3] = 0xff;
+                    options[4] = 0xff;
+                }
                 else
-                    options.DictSize = ((2 | (uint)((prop) & 1)) << (prop / 2 + 11));
+                {
+                    uint dictSize = ((2 | (uint)((options[0]) & 1)) << (options[0] / 2 + 11));
+                    byte[] dictSizeArr = BitConverter.GetBytes(dictSize);
+                    options[1] = dictSizeArr[0];
+                    options[2] = dictSizeArr[1];
+                    options[3] = dictSizeArr[2];
+                    options[4] = dictSizeArr[3];
+                }
 
-                Stream = InnoLzma2Decompressor.InitRawLzmaStream(LZMA_FILTER_LZMA2, options);
+                Decoder = InnoLzma2Decompressor.InitRawLzmaStream(options);
 			}
 
-			return base.Filter(beginIn, endIn, beginOut, endOut, flush);
-		}
+            return base.Filter(src, dest, offset, n);
+        }
     }
 }

@@ -18,8 +18,7 @@
  * 3. This notice may not be removed or altered from any source distribution.
  */
 
-using InnoExtractSharp.Util;
-using System.Linq;
+using System.IO;
 
 // LZMA 1 and 2 (aka xz) descompression filters to be used with boost::iostreams.
 namespace InnoExtractSharp.Streams
@@ -33,52 +32,33 @@ namespace InnoExtractSharp.Streams
     /// is missing the uncompressed size field. The fiels that are present are encoded
     /// identically.
     /// </summary>
-    public unsafe class InnoLzma1DecompressorImpl : LzmaDecompressorImplBase
+    public class InnoLzma1DecompressorImpl : LzmaDecompressorImplBase
     {
-        private int nread; // Number of bytes read into header
-        private char[] Header = new char[5];
+        private byte[] Header = new byte[5];
 
         public InnoLzma1DecompressorImpl()
         {
-            nread = 0;
         }
 
-        public override bool Filter(char* beginIn, char* endIn, char* beginOut, char* endOut, bool flush)
+        public override bool Filter(Stream src, byte[] dest, int offset, int n)
         {
             // Decode the header.
-            if (Stream == null)
+            if (Decoder == null)
             {
                 // Read enough bytes to decode the header.
-                while (nread != 5)
-                {
-                    if (beginIn == endIn)
-                        return true;
+                src.Read(Header, 0, 5);
+                if (Header[0] > (9 * 5 * 5))
+                    throw new LzmaError("inno lzma1 property error", 7 /* (int)LZMA_FORMAT_ERROR */);
 
-                    Header[nread++] = *beginIn++;
-                }
-
-                LzmaOptionsLzma options = new LzmaOptionsLzma();
-
-                byte properties = (byte)Header[0];
-                if (properties > (9 * 5 * 5))
-                    throw new LzmaError("inno lzma1 property error", (int)LZMA_FORMAT_ERROR);
-
-                options.PB = (uint)(properties / (9 * 5));
-                options.LP = (uint)((properties % (9 * 5)) / 9);
-                options.LC = (uint)(properties % 9);
-
-                options.DictSize = new LittleEndian<uint>().Load(Header.Select(c => (byte)c).ToArray(), 1);
-
-                Stream = InnoLzma1Decompressor.InitRawLzmaStream(LZMA_FILTER_LZMA1, options);
+                Decoder = InnoLzma1Decompressor.InitRawLzmaStream(Header);
             }
 
-            return base.Filter(beginIn, endIn, beginOut, endOut, flush);
+            return base.Filter(src, dest, offset, n);
         }
 
         public override void Close()
         {
             base.Close();
-            nread = 0;
         }
     }
 }
